@@ -37,7 +37,7 @@
 >![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Caesar/Rot13]]
 
 
-# Páginas Web Útiles
+# Páginas Web
 
 - https://www.revshells.com/ : Generador de Reverse Shell
 
@@ -96,6 +96,12 @@ var _0xb01ac5=_0x2fcf1e[0x0],_0x1441b2=_0x598f67+_0xb01ac5,_0x2d62a3=_0xab03['lM
 >```
 >![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Deobfuscation]]
 >
+
+## PrivEsc
+
+>[!info]- HackTricks 
+>https://hacktricks.wiki/en/index.html
+
 
 # Repositorios
 
@@ -156,7 +162,7 @@ enum4linux-ng.py 10.129.14.128 -A
 > [!info]- SecLists
 > ![[Ciberseguridad/HTB Apuntes/Web Fuzzing#Wordlists]]
 
-## Osint
+# OSINT
 
 > [!info]- Shodan
 > ![[Ciberseguridad/HTB Apuntes/Footprinting#Shodan]]
