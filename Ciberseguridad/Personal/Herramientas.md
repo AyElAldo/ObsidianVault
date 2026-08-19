@@ -100,7 +100,20 @@ var _0xb01ac5=_0x2fcf1e[0x0],_0x1441b2=_0x598f67+_0xb01ac5,_0x2d62a3=_0xab03['lM
 ## PrivEsc
 
 >[!info]- HackTricks 
->https://hacktricks.wiki/en/index.html
+>Documenta técnicas de explotación, escalada de privilegios, enumeración de servicios, bypass de defensas, etc., organizadas por tecnología/plataforma. Sirve como referencia rápida durante un pentest
+>- https://hacktricks.wiki/en/index.html
+
+>[!info]- linPEAS
+>Script de enumeración automática para Linux (existe la contraparte winPEAS para Windows). Escanea el sistema en busca de vectores de escalada de privilegios: permisos mal configurados, cron jobs, binarios SUID explotables, credenciales expuestas, kernel vulnerable, etc. Se corre después de obtener acceso inicial (post-explotación) para ahorrar tiempo identificando el camino más probable hacia root, en lugar de enumerar todo manualmente.
+>- https://github.com/peass-ng/PEASS-ng
+
+>[!info]- DirtyCow
+>## DirtyCow (CVE-2016-5195)
+Repositorio con PoCs de una vulnerabilidad de _race condition_ en el subsistema de memoria del kernel Linux (copy-on-write), que permite escalar privilegios a root desde un usuario sin privilegios. Afecta kernels antiguos (pre-parche 2016).
+>- https://github.com/dirtycow/dirtycow.github.io/wiki/PoCs
+
+>[!info]- GTFObins
+>https://gtfobins.org/
 
 
 # Repositorios
