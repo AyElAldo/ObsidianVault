@@ -157,10 +157,10 @@ Status...........: Cracked
 
 Now we have the credentials, we can log on as `admin`
 
-![[2_admin_login.png]]
+![[../src/2_admin_login.png]]
 
 
-![[2_theme_php_file.png]]
+![[../src/2_theme_php_file.png]]
 
 I set the listener on port 7777:
 
