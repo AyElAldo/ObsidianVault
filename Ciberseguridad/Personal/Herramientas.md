@@ -175,6 +175,9 @@ enum4linux-ng.py 10.129.14.128 -A
 > [!info]- SecLists
 > ![[Ciberseguridad/HTB Apuntes/Web Fuzzing#Wordlists]]
 
+>[!Info]- Powershell download cradles
+>Extensive list of commands in Powershell cradles yo download or invoke for file tranfers.
+>- https://gist.github.com/HarmJ0y/bb48307ffa663256e239
 # OSINT
 
 > [!info]- Shodan
