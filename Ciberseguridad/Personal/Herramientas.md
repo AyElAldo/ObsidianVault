@@ -39,7 +39,10 @@
 
 # Páginas Web
 
-- https://www.revshells.com/ : Generador de Reverse Shell
+>[!info] Reverse Shells
+>These are repositories of reverse shells in Linux, Windows and MacOS.
+>- https://swisskyrepo.github.io/InternalAllTheThings/cheatsheets/shell-reverse-cheatsheet/
+>- https://www.revshells.com/ : Generador de Reverse Shell
 
 > [!info]- Web Certificate Search
 >![[Ciberseguridad/HTB Apuntes/Footprinting#[CRT.SH (Certificate Search)](https //crt.sh/)]]
