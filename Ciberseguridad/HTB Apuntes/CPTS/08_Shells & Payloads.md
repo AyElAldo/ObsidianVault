@@ -699,3 +699,28 @@ In the web server we upload a zip with an `aspx` web shell.
 # ANSWER
 c:\windows\system32\inetsrv
 ```
+# Antak Webshell
+## ASPX Explained
+
+`Active Server Page Extended` (`ASPX`) is a file type/extension written for [Microsoft's ASP.NET Framework](https://docs.microsoft.com/en-us/aspnet/overview). On a web server running the ASP.NET framework, web form pages can be generated for users to input data. On the server side, the information will be converted into HTML. We can take advantage of this by using an ASPX-based web shell to control the underlying Windows operating system. Let's witness this first-hand by utilizing the Antak Webshell.
+## Working with Antak
+
+The Antak files can be found in the `/usr/share/nishang/Antak-WebShell` directory.
+
+```shell
+ls /usr/share/nishang/Antak-WebShell
+
+antak.aspx Readme.md
+```
+## Antak Demonstration
+
+Now that we understand what Antak is and how it works let's put it to the test against the same web application from the Laudanum section. If you wish to follow along with this demonstration, you will need to add an entry into your `/etc/hosts` file on your attack VM or within Pwnbox for the host we are attacking.
+#### Move a Copy for Modification
+```shell
+cp /usr/share/nishang/Antak-WebShell/antak.aspx /home/administrator/Upload.aspx
+```
+Make sure you set credentials for access to the web shell. Modify `line 14`, adding a user (green arrow) and password (orange arrow).
+
+# PHP Web Shells
+
+Hypertext Preprocessor or [PHP](https://www.php.net/) is an open-source general-purpose scripting language typically used as part of a web stack that powers a website. At the time of this writing (October 2021), PHP is the most popular `server-side programming language`. According to a [recent survey](https://w3techs.com/technologies/details/pl-php) conducted by W3Techs, "PHP is used by `78.6%` of all websites whose server-side programming language we know".
