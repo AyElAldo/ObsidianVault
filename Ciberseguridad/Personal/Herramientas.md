@@ -39,7 +39,14 @@
 
 # Páginas Web
 
->[!info] Reverse Shells
+>[!info]- Shells
+># WebShells
+>## Laudanum, One Webshell to Rule Them All
+Laudanum is a repository of ready-made files that can be used to inject onto a victim and receive back access via a reverse shell, run commands on the victim host right from the browser, and more. The repo includes injectable files for many different web application languages to include asp, aspx, jsp, php, and more.
+>- https://github.com/jbarcia/Web-Shells/tree/master/laudanum
+>>[!Important] 
+>>The Laudanum files can be found already installed in the `/usr/share/laudanum` directory.
+># Reverse Shells
 >These are repositories of reverse shells in Linux, Windows and MacOS.
 >- https://swisskyrepo.github.io/InternalAllTheThings/cheatsheets/shell-reverse-cheatsheet/
 >- https://www.revshells.com/ : Generador de Reverse Shell

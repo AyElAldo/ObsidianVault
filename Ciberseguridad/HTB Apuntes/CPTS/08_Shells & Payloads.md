@@ -1,4 +1,4 @@
-A `shell` is a program that provides a computer user with an interface to input instructions into the system and view text output (Bash, Zsh, cmd, and PowerShell, for example). As penetration testers and information security professionals, a shell is often the result of exploiting a vulnerability or bypassing security measures to gain interactive access to a host.
+![](02_exploit_rconfig.png)A `shell` is a program that provides a computer user with an interface to input instructions into the system and view text output (Bash, Zsh, cmd, and PowerShell, for example). As penetration testers and information security professionals, a shell is often the result of exploiting a vulnerability or bypassing security measures to gain interactive access to a host.
 
 - `"I caught a shell."`
 - `"I popped a shell!"`
@@ -547,3 +547,155 @@ use exploit/windows/smb/ms17_010_psexec
 ```
 
 ![](src/08_src/01_EternalBlue.png)
+# Infiltrating Unix/Linux
+
+W3Techs maintains an ongoing OS usage statistics [study](https://w3techs.com/technologies/overview/operating_system). This study reports that over `70%` of websites (webservers) run on a Unix-based system. For us, this means we can significantly benefit from continuing to grow our knowledge of Unix/Linux and how we can gain shell sessions on these environments to potentially pivot further within an environment.
+While it is common for organizations to use 3rd parties & cloud providers to host their websites & web apps, many organizations still host their websites & web applications on servers in their network environments (on-prem).
+## Common Considerations
+
+As you may very well have noticed by now, gaining a shell session with a system can be done in various ways, one common way is through a vulnerability in an application. We will identify a vulnerability and discover an exploit that we can use to gain a shell by delivering a payload. When considering how we will establish a shell session on a Unix/Linux system, we will benefit from considering the following:
+
+- What distribution of Linux is the system running?
+- What shell & programming languages exist on the system?
+- What function is the system serving for the network environment it is on?
+- What application is the system hosting?
+- Are there any known vulnerabilities?
+## Gaining a Shell Through Attacking a Vulnerable Application
+
+As in most engagements, we will start with an initial enumeration of the system using `Nmap`.
+#### Enumerate the Host
+
+```shell
+nmap -sC -sV 10.129.201.101
+```
+
+eeping our goal of `gaining a shell session` in mind, we must establish some next steps after examining our scan output.
+
+`What information could we gather from the output?`
+
+Considering we can see the system is listening on ports 80 (`HTTP`), 443 (`HTTPS`), 3306 (`MySQL`), and 21 (`FTP`), it may be safe to assume that this is a web server hosting a web application. We can also see some version numbers revealed associated with the web stack.
+### Exploit the target and find the hostname of the router in the devicedetails directory at the root of the file system.
+
+```shell
+nmap -Pn 10.129.201.101
+# Get the opne ports and fingerprinted them
+sudo nmap -Pn -oA 01_exercise -O -sV 10.129.201.101 -p21,22,80,111,443,1175,3306,20222
+```
+
+After looking for the CVE on Internet we get this one:
+
+```shell
+use linux/http/rconfig_vendors_auth_file_upload_rce
+# Configure the options and EXPLOIT
+```
+ And we get a meterpreter shell
+ 
+ ![](src/08_src/02_exploit_rconfig.png)
+THEN
+ ![](src/08_src/03_flag.png)
+# Spawning Interactive Shells
+
+## /bin/sh -i
+
+This command will execute the shell interpreter specified in the path in interactive mode (`-i`).
+#### Interactive
+```shell
+/bin/sh -i
+```
+## Perl
+
+If the programming language [Perl](https://www.perl.org/) is present on the system, these commands will execute the shell interpreter specified.
+#### Perl To Shell
+```shell
+perl -e 'exec "/bin/sh";'
+perl: exec "/bin/sh";
+```
+The command directly above should be run from a script.
+## Ruby
+
+If the programming language [Ruby](https://www.ruby-lang.org/en/) is present on the system, this command will execute the shell interpreter specified:
+#### Ruby To Shell
+```shell
+ruby: exec "/bin/sh"
+```
+## Lua
+
+If the programming language [Lua](https://www.lua.org/) is present on the system, we can use the `os.execute` method to execute the shell interpreter specified using the full command below:
+#### Lua To Shell
+```shell
+lua: os.execute('/bin/sh')
+```
+The command directly above should be run from a script.
+## AWK
+
+[AWK](https://man7.org/linux/man-pages/man1/awk.1p.html) is a C-like pattern scanning and processing language present on most UNIX/Linux-based systems, widely used by developers and sysadmins to generate reports. It can also be used to spawn an interactive shell. This is shown in the short awk script below:
+#### AWK To Shell
+```shell
+awk 'BEGIN {system("/bin/sh")}'
+```
+## Find
+
+[Find](https://man7.org/linux/man-pages/man1/find.1.html) is a command present on most Unix/Linux systems widely used to search for & through files and directories using various criteria. It can also be used to execute applications and invoke a shell interpreter.
+#### Using Find For A Shell
+```shell
+find / -name nameoffile -exec /bin/awk 'BEGIN {system("/bin/sh")}' \;
+```
+This use of the find command is searching for any file listed after the `-name` option, then it executes `awk` (`/bin/awk`) and runs the same script we discussed in the awk section to execute a shell interpreter.
+## Using Exec To Launch A Shell
+```shell
+find . -exec /bin/sh \; -quit
+```
+This use of the find command uses the execute option (`-exec`) to initiate the shell interpreter directly. If `find` can't find the specified file, then no shell will be attained.
+## VIM
+
+Yes, we can set the shell interpreter language from within the popular command-line-based text-editor `VIM`. This is a very niche situation we would find ourselves in to need to use this method, but it is good to know just in case.
+#### Vim To Shell
+```shell
+vim -c ':!/bin/sh'
+```
+#### Vim Escape
+```shell
+vim 
+:set shell=/bin/sh 
+:shell
+```
+## Execution Permissions Considerations
+
+In addition to knowing about all the options listed above, we should be mindful of the permissions we have with the shell session's account. We can always attempt to run this command to list the file properties and permissions our account has over any given file or binary:
+#### Permissions
+
+```shell
+ls -la <path/to/fileorbinary>
+```
+We can also attempt to run this command to check what `sudo` permissions the account we landed on has:
+
+```shell
+sudo -l
+```
+# Introduction to Web Shells
+
+It is almost guaranteed that we will come across web servers in our time learning and actively engaging in the practice of pentesting. Much of the world's software services are moving to web-based platforms accessible over the world wide web using a web browser and HTTP/S.
+## What is a Web Shell?
+
+A `web shell` is a browser-based shell session we can use to interact with the underlying operating system of a web server. Again, to gain remote code execution via web shell, we must first find a website or web application vulnerability that can give us file upload capabilities. Most web shells are gained by uploading a payload written in a web language on the target server. The payload(s) we upload should give us remote code execution capability within the browser.
+# Laudanum, One Webshell to Rule Them All
+
+Laudanum is a repository of ready-made files that can be used to inject onto a victim and receive back access via a reverse shell, run commands on the victim host right from the browser, and more. The repo includes injectable files for many different web application languages to include `asp, aspx, jsp, php,` and more. This is a staple to have on any pentest. If you are using your own VM, Laudanum is built into Parrot OS and Kali by default. For any other distro, you will likely need to pull a copy down to use. You can get it [here](https://github.com/jbarcia/Web-Shells/tree/master/laudanum).
+The Laudanum files can be found in the `/usr/share/laudanum` directory. For most of the files within Laudanum, you can copy them as-is and place them where you need them on the victim to run. For specific files such as the shells, you must edit the file first to insert your `attacking`
+#### Move a Copy for Modification
+```shell
+cp /usr/share/laudanum/aspx/shell.aspx /home/tester/demo.aspx
+```
+Add your IP address to the `allowedIps` variable on line `59`. Make any other changes you wish. It can be prudent to remove the ASCII art and comments from the file. These items in a payload are often signatured on and can alert the defenders/AV to what you are doing.
+## Exercise
+### Establish a web shell session with the target using the concepts covered in this section. Submit the full path of the directory you land in. (Format: c:\path\you\land\in)
+
+>[!Important]
+>Set the `status.inlanefreight.local` to the IP `10.129.181.199` in `/etc/hosts`
+
+In the web server we upload a zip with an `aspx` web shell. 
+
+```shell
+# ANSWER
+c:\windows\system32\inetsrv
+```
