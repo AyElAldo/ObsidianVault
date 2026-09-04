@@ -776,5 +776,42 @@ When utilizing web shells, consider the below potential issues that may arise du
 >
 > **Ref:** GTFOBins → php → SUID
 
-# LAB
+# Detection & Prevention
+## Monitoring
 
+When it comes to looking for and identifying active shells, payload delivery and execution, and potential attempts to subvert our defenses, we have many different options to utilize to detect and respond to these events.
+
+|**Tactic / Technique**|**Description**|
+|---|---|
+|[Initial Access](https://attack.mitre.org/techniques/T1190/)|Attackers will attempt to gain initial access by compromising a public-facing host or service such as web Applications, misconfigured services such as SMB or authentication protocols, and/or bugs in a public-facing host that introduce a vulnerability. This is often done on some form of bastion host and provides the attacker with a foothold in the network but not yet full access. For more information on initial access, especially via Web Applications, check out the [OWASP Top Ten](https://owasp.org/www-project-top-ten/) or read further in the Mitre Att&ck framework.|
+|[Execution](https://attack.mitre.org/tactics/TA0002)|This technique depends on code supplied and planted by an attacker running on the victim host. `The Shells & Payloads` module focuses mainly on this tactic. We utilize many different payloads, delivery methods, and shell scripting solutions to access a host. This can be anything from the execution of commands within our web browser to get execution and access on a Web Application, issuing a PowerShell one-liner via PsExec, taking advantage of a publicly released exploit or zero-day in conjunction with a framework such as Metasploit, or uploading a file to a host via many different protocols and calling it remotely to receive a callback.|
+|[Command & Control](https://attack.mitre.org/tactics/TA0011)|Command and Control (`C2`) can be looked at as the culmination of our efforts within this module. We gain access to a host and establish some mechanism for continued and/or interactive access via code execution, then utilize that access to perform follow on actions on objectives within the victim network. The use of standard ports and protocols within the victim network to issue commands and receive output from the victim is common. This can appear as anything from normal web traffic over HTTP/S, commands issued via other common external protocols such as DNS and NTP, and even the use of common allowed applications such as Slack, Discord, or MS Teams to issue commands and receive check-ins. C2 can have various levels of sophistication varying from basic clear text channels like Netcat to utilizing encrypted and obfuscated protocols along with complex traffic routes via proxies, redirectors, and VPNs.|
+## Events To Watch For:
+
+- `File uploads`: Especially with Web Applications, file uploads are a common method of acquiring a shell on a host besides direct command execution in the browser. Pay attention to application logs to determine if anyone has uploaded anything potentially malicious. The use of firewalls and anti-virus can add more layers to your security posture around the site. Any host exposed to the internet from your network should be sufficiently hardened and monitored.
+- `Suspicious non-admin user actions`: Looking for simple things like normal users issuing commands via Bash or cmd can be a significant indicator of compromise. When was the last time an average user, much less an admin, had to issue the command `whoami` on a host? Users connecting to a share on another host in the network over SMB that is not a normal infrastructure share can also be suspicious. This type of interaction usually is end host to infrastructure server, not end host to end host. Enabling security measures such as logging all user interactions, PowerShell logging, and other features that take note when a shell interface is used will provide you with more insight.
+- `Anomalous network sessions`: Users tend to have a pattern they follow for network interaction. They visit the same websites, use the same applications, and often perform those actions multiple times a day like clockwork. Logging and parsing NetFlow data can be a great way to spot anomalous network traffic. Looking at things such as top talkers, or unique site visits, watching for a heartbeat on a nonstandard port (like 4444, the default port used by Meterpreter), and monitoring any remote login attempts or bulk GET / POST requests in short amounts of time can all be indicators of compromise or attempted exploitation. Using tools like network monitors, firewall logs, and SIEMS can help bring a bit of order to the chaos that is network traffic.
+
+Keep in mind that if a payload is successfully executed, it will need to communicate over the network, so this is why network visibility is essential within the context of shells & payloads. Having a network security appliance capable of [deep packet inspection](https://en.wikipedia.org/wiki/Deep_packet_inspection) can often act as an anti-virus for the network.
+
+## Protecting End Devices
+
+`End devices` are the devices that connect at the "end" of a network. This means they are either the source or destination of data transmission. Some examples of end devices would be:
+
+- Workstations (employees computers)
+- Servers (providing various services on the network)
+- Printers
+- Network Attached Storage (NAS)
+- Cameras
+- Smart TVs
+- Smart Speakers
+
+We should prioritize the protection of these kinds of devices, especially those that run an operating system with a `CLI` that can be remotely accessed.
+## Potential Mitigations:
+
+Consider the list below when considering what implementations you can put in place to mitigate many of these vectors or exploits.
+
+- `Application Sandboxing`: By sandboxing your applications that are exposed to the world, you can limit the scope of access and damage an attacker can perform if they find a vulnerability or misconfiguration in the application.
+- `Least Privilege Permission Policies`: Limiting the permissions users have can go a long way to help stop unauthorized access or compromise. Does an ordinary user need administrative access to perform their daily duties? What about domain admin? Not really, right? Ensuring proper security policies and permissions are in place will often hinder if not outright stop an attack.
+- `Host Segmentation & Hardening`: Properly hardening hosts and segregating any hosts that require exposure to the internet can help ensure an attacker cannot easily hop in and move laterally into your network if they gain access to a boundary host. Following STIG hardening guides and placing hosts such as web servers, VPN servers, etc., in a DMZ or 'quarantine' network segment will stop that type of access and lateral movement.
+- `Physical and Application Layer Firewalls`: Firewalls can be powerful tools if appropriately implemented. Proper inbound and outbound rules that only allow traffic first established from within your network, on ports approved for your applications, and denying inbound traffic from your network addresses or other prohibited IP space can cripple many bind and reverse shells. It adds a hop in the network chain, and network implementations such as Network Address Translation (NAT) can break the functionality of a shell payload if it is not taken into account.
