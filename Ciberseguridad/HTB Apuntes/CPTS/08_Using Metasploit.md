@@ -68,3 +68,26 @@ This division makes it easier for us to find and select the appropriate MSF feat
 It is therefore crucial that we familiarize ourselves with this structure. Therefore, we will look at this framework's components to better understand how they are related.
 
 ![Flowchart of Engagement Structure detailing steps: Enumeration with Service Validation and Vulnerability Research; Preparation with Code Auditing; Exploitation with Module Execution; Privilege Escalation; Post-Exploitation with Pivoting and Data Exfiltration.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/39/S04_SS03.png)
+# Modules
+
+As we mentioned previously, Metasploit `modules` are prepared scripts with a specific purpose and corresponding functions that have already been developed and tested in the wild. The `exploit` category consists of so-called proof-of-concept (`POCs`) that can be used to exploit existing vulnerabilities in a largely automated manner. Many people often think that the failure of the exploit disproves the existence of the suspected vulnerability. However, this is only proof that the Metasploit exploit does not work and not that the vulnerability does not exist.
+
+Once we are in the `msfconsole`, we can select from an extensive list containing all the available Metasploit modules. Each of them is structured into folders, which will look like this:
+#### Syntax
+
+```shell
+<No.> <type>/<os>/<service>/<name>
+```
+#### Type
+
+The `Type` tag is the first level of segregation between the Metasploit `modules`. Looking at this field, we can tell what the piece of code for this module will accomplish. Some of these `types` are not directly usable as an `exploit` module would be, for example. However, they are set to introduce the structure alongside the interactable ones for better modularization. To explain better, here are the possible types that could appear in this field:
+
+|**Type**|**Description**|
+|---|---|
+|`Auxiliary`|Scanning, fuzzing, sniffing, and admin capabilities. Offer extra assistance and functionality.|
+|`Encoders`|Ensure that payloads are intact to their destination.|
+|`Exploits`|Defined as modules that exploit a vulnerability that will allow for the payload delivery.|
+|`NOPs`|(No Operation code) Keep the payload sizes consistent across exploit attempts.|
+|`Payloads`|Code runs remotely and calls back to the attacker machine to establish a connection (or shell).|
+|`Plugins`|Additional scripts can be integrated within an assessment with `msfconsole` and coexist.|
+|`Post`|Wide array of modules to gather information, pivot deeper, etc.|
