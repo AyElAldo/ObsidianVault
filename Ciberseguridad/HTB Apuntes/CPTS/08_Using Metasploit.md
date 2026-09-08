@@ -91,3 +91,64 @@ The `Type` tag is the first level of segregation between the Metasploit `modu
 |`Payloads`|Code runs remotely and calls back to the attacker machine to establish a connection (or shell).|
 |`Plugins`|Additional scripts can be integrated within an assessment with `msfconsole` and coexist.|
 |`Post`|Wide array of modules to gather information, pivot deeper, etc.|
+#### OS
+
+The `OS` tag specifies which operating system and architecture the module was created for. Naturally, different operating systems require different code to be run to get the desired results.
+
+#### Service
+
+The `Service` tag refers to the vulnerable service that is running on the target machine. For some modules, such as the `auxiliary` or `post` ones, this tag can refer to a more general activity such as `gather`, referring to the gathering of credentials, for example.
+
+#### Name
+
+Finally, the `Name` tag explains the actual action that can be performed using this module created for a specific purpose.
+## Searching for Modules
+
+Metasploit also offers a well-developed search function for the existing modules. With the help of this function, we can quickly search through all the modules using specific `tags` to find a suitable one for our target.
+#### MSF - Search Function
+
+```shell
+help search 
+```
+#### MSF - Specific Search
+
+```shell
+search type:exploit platform:windows cve:2021 rank:excellent microsoft
+```
+#### MSF - Module Information
+
+```shell
+msf6 exploit(windows/smb/ms17_010_psexec) > info
+```
+#### MSF - Target Specification
+
+```shell
+set RHOSTS 10.10.10.40
+```
+#### MSF - Permanent Target Specification
+
+```shell
+setg RHOSTS 10.10.10.40
+```
+Finally, since we are about to use a TCP-based reverse shell (`/windows/meterpreter/reverse_tcp`) we need to specify to which IP address it needs to connect to in order to establish a connection. Therefore, we need to set `LHOST` to our own IP address like following:
+# Targets
+
+`Targets` are unique operating system identifiers taken from the versions of those specific operating systems which adapt the selected exploit module to run on that particular version of the operating system. The `show targets` command issued within an exploit module view will display all available vulnerable targets for that specific exploit, while issuing the same command in the root menu, outside of any selected exploit module, will let us know that we need to select an exploit module first.
+## Selecting a Target
+
+We can see that there is only one general type of target set for this type of exploit. What if we change the exploit module to something that needs more specific target ranges? The following exploit is aimed at:
+
+- `MS12-063 Microsoft Internet Explorer execCommand Use-After-Free Vulnerability`
+
+If we want to find out more about this specific module and what the vulnerability behind it does, we can use the `info` command. This command can help us out whenever we are unsure about the origins or functionality of different exploits or auxiliary modules. Keeping in mind that it is always considered best practice to audit our code for any artifact generation or 'additional features', the `info` command should be one of the first steps we take when using a new module. This way, we can familiarize ourselves with the exploit functionality while assuring a safe, clean working environment for both our clients and us.
+#### MSF - Target Selection
+
+```shell
+msf6 exploit(windows/browser/ie_execcommand_uaf) > info
+```
+
+## Target Types
+
+There is a large variety of target types. Every target can vary from another by service pack, OS version, and even language version. It all depends on the return address and other parameters in the target or within the exploit module.
+
+The return address can vary because a particular language pack changes addresses, a different software version is available, or the addresses are shifted due to hooks. It is all determined by the type of return address required to identify the target. This address can be `jmp esp`, a jump to a specific register that identifies the target, or a `pop/pop/ret`. For more on the topic of return addresses, see the [Stack-Based Buffer Overflows on Windows x86](https://academy.hackthebox.com/module/89/section/931) module. Comments in the exploit module's code can help us determine what the target is defined by.
