@@ -152,3 +152,61 @@ msf6 exploit(windows/browser/ie_execcommand_uaf) > info
 There is a large variety of target types. Every target can vary from another by service pack, OS version, and even language version. It all depends on the return address and other parameters in the target or within the exploit module.
 
 The return address can vary because a particular language pack changes addresses, a different software version is available, or the addresses are shifted due to hooks. It is all determined by the type of return address required to identify the target. This address can be `jmp esp`, a jump to a specific register that identifies the target, or a `pop/pop/ret`. For more on the topic of return addresses, see the [Stack-Based Buffer Overflows on Windows x86](https://academy.hackthebox.com/module/89/section/931) module. Comments in the exploit module's code can help us determine what the target is defined by.
+# Payloads
+
+A `Payload` in Metasploit refers to a module that aids the exploit module in (typically) returning a shell to the attacker. The payloads are sent together with the exploit itself to bypass standard functioning procedures of the vulnerable service (`exploits job`) and then run on the target OS to typically return a reverse connection to the attacker and establish a foothold (`payload's job`).
+
+There are three different types of payload modules in the Metasploit Framework: Singles, Stagers, and Stages. Using three typologies of payload interaction will prove beneficial to the pentester. It can offer the flexibility we need to perform certain types of tasks. Whether or not a payload is staged is represented by `/` in the payload name.
+
+For example, `windows/shell_bind_tcp` is a single payload with no stage, whereas `windows/shell/bind_tcp` consists of a stager (`bind_tcp`) and a stage (`shell`).
+#### Singles
+
+A `Single` payload contains the exploit and the entire shellcode for the selected task. Inline payloads are by design more stable than their counterparts because they contain everything all-in-one. However, some exploits will not support the resulting size of these payloads as they can get quite large. `Singles` are self-contained payloads. They are the sole object sent and executed on the target system, getting us a result immediately after running. A Single payload can be as simple as adding a user to the target system or booting up a process.
+#### Stagers
+
+`Stager` payloads work together with `Stage` payloads to perform a specific task. A stager runs on the victim machine and initiates an outbound connection to the attacker's listener, setting up the communication channel over which the subsequent stage payload is delivered. Stagers are typically designed to be small and reliable. Metasploit will automatically select the most appropriate stager for a given scenario and fall back to a less-preferred one when necessary.
+
+Windows NX vs. NO-NX Stagers
+
+- Reliability issue for NX CPUs and DEP
+- NX stagers are bigger (VirtualAlloc memory)
+- Default is now NX + Win7 compatible
+#### Stages
+
+`Stages` are payload components that are downloaded by stager's modules. The various payload Stages provide advanced features with no size limits, such as Meterpreter, VNC Injection, and others. Payload stages automatically use middle stagers:
+
+- A single `recv()` fails with large payloads
+- The Stager receives the middle stager
+- The middle Stager then performs a full download
+- Also better for RWX
+## Staged Payloads
+
+A staged payload is, simply put, an `exploitation process` that is modularized and functionally separated to help segregate the different functions it accomplishes into different code blocks, each completing its objective individually but working on chaining the attack together. This will ultimately grant an attacker remote access to the target machine if all the stages work correctly.
+
+The scope of this payload, as with any others, besides granting shell access to the target system, is to be as compact and inconspicuous as possible to aid with the Antivirus (`AV`) / Intrusion Prevention System (`IPS`) evasion as much as possible.
+#### Meterpreter Payload
+
+The `Meterpreter` payload is a specific type of multi-faceted payload that uses `DLL injection` to ensure the connection to the victim host is stable, hard to detect by simple checks, and persistent across reboots or system changes.
+## Searching for Payloads
+
+To select our first payload, we need to know what we want to do on the target machine. For example, if we are going for access persistence, we will probably want to select a Meterpreter payload.
+
+As mentioned above, Meterpreter payloads offer us a significant amount of flexibility. Their base functionality is already vast and influential. We can automate and quickly deliver combined with plugins such as [GentilKiwi's Mimikatz Plugin](https://github.com/gentilkiwi/mimikatz) parts of the pentest while keeping an organized, time-effective assessment. To see all of the available payloads, use the `show payloads` command in `msfconsole`.
+## Payload Types
+
+The table below contains the most common payloads used for Windows machines and their respective descriptions.
+
+|**Payload**|**Description**|
+|---|---|
+|`generic/custom`|Generic listener, multi-use|
+|`generic/shell_bind_tcp`|Generic listener, multi-use, normal shell, TCP connection binding|
+|`generic/shell_reverse_tcp`|Generic listener, multi-use, normal shell, reverse TCP connection|
+|`windows/x64/exec`|Executes an arbitrary command (Windows x64)|
+|`windows/x64/loadlibrary`|Loads an arbitrary x64 library path|
+|`windows/x64/messagebox`|Spawns a dialog via MessageBox using a customizable title, text & icon|
+|`windows/x64/shell_reverse_tcp`|Normal shell, single payload, reverse TCP connection|
+|`windows/x64/shell/reverse_tcp`|Normal shell, stager + stage, reverse TCP connection|
+|`windows/x64/shell/bind_ipv6_tcp`|Normal shell, stager + stage, IPv6 Bind TCP stager|
+|`windows/x64/meterpreter/$`|Meterpreter payload + varieties above|
+|`windows/x64/powershell/$`|Interactive PowerShell sessions + varieties above|
+|`windows/x64/vncinject/$`|VNC Server (Reflective Injection) + varieties above|
