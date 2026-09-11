@@ -302,3 +302,104 @@ With the help of the database, we can manage many different categories and hosts
 We can think of `Workspaces` the same way we would think of folders in a project. We can segregate the different scan results, hosts, and extracted information by IP, subnet, network, or domain.
 
 To view the current Workspace list, use the `workspace` command. Adding a `-a` or `-d` switch after the command, followed by the workspace's name, will either `add` or `delete` that workspace to the database.
+Notice that the default Workspace is named `default` and is currently in use according to the `*` symbol. Type the `workspace [name]` command to switch the presently used workspace. Looking back at our example, let us create a workspace for this assessment and select it.
+
+```shell
+# Create a workspace
+workspace -a Target_1
+# Switch to workspace
+workspace Target_1
+```
+## Importing Scan Results
+
+Next, let us assume we want to import a `Nmap scan` of a host into our Database's Workspace to understand the target better. We can use the `db_import` command for this. After the import is complete, we can check the presence of the host's information in our database by using the `hosts` and `services` commands. Note that the `.xml` file type is preferred for `db_import`.
+
+```shell
+# Stored Nmap Scan
+cat Target.nmap
+# Import scan
+db_import Target.xml
+
+# Then we can type the commands:
+hosts
+
+services
+```
+## Using Nmap Inside MSFconsole
+
+Alternatively, we can use Nmap straight from msfconsole! To scan directly from the console without having to background or exit the process, use the `db_nmap` command.
+#### MSF - Nmap
+
+```shell
+db_nmap -sV -sS 10.10.10.8
+```
+## Data Backup
+
+After finishing the session, make sure to back up our data if anything happens with the PostgreSQL service. To do so, use the `db_export` command.
+
+```shell
+db_export -h
+```
+
+This data can be imported back to msfconsole later when needed. Other commands related to data retention are the extended use of `hosts`, `services`, and the `creds` and `loot` commands.
+## Hosts
+
+The `hosts` command displays a database table automatically populated with the host addresses, hostnames, and other information we find about these during our scans and interactions. For example, suppose `msfconsole` is linked with scanner plugins that can perform service and OS detection. In that case, this information should automatically appear in the table once the scans are completed through msfconsole. Again, tools like Nessus, NexPose, or Nmap will help us in these cases.
+
+Hosts can also be manually added as separate entries in this table. After adding our custom hosts, we can also organize the format and structure of the table, add comments, change existing information, and more.
+#### MSF - Stored Hosts
+
+```shell
+hosts -h
+```
+## Services
+
+The `services` command functions the same way as the previous one. It contains a table with descriptions and information on services discovered during scans or interactions. In the same way as the command above, the entries here are highly customizable.
+#### MSF - Stored Services of Hosts
+
+```shell
+services -h
+```
+## Credentials
+
+The `creds` command allows you to visualize the credentials gathered during your interactions with the target host. We can also add credentials manually, match existing credentials with port specifications, add descriptions, etc.
+#### MSF - Stored Credentials
+
+```shell
+creds -h
+```
+## Loot
+
+The `loot` command works in conjunction with the command above to offer you an at-a-glance list of owned services and users. The loot, in this case, refers to hash dumps from different system types, namely hashes, passwd, shadow, and more.
+# Plugins
+
+The use of plugins makes a pentester's life even easier, bringing the functionality of well-known software into the `msfconsole` or Metasploit Pro environments. Whereas before, we needed to cycle between different software to import and export results, setting options and parameters over and over again, now, with the use of plugins, everything is automatically documented by msfconsole into the database we are using and hosts, services and vulnerabilities are made available at-a-glance for the user. [Plugins](https://web.archive.org/web/20240302133153/https://www.rubydoc.info/github/rapid7/metasploit-framework/Msf/Plugin) work directly with the API and can be used to manipulate the entire framework. They can be useful for automating repetitive tasks, adding new commands to the `msfconsole`, and extending the already powerful framework.
+## Using Plugins
+
+To start using a plugin, we will need to ensure it is installed in the correct directory on our machine. Navigating to `/usr/share/metasploit-framework/plugins`, which is the default directory for every new installation of `msfconsole`, should show us which plugins we have to our availability:
+
+```shell
+ls /usr/share/metasploit-framework/plugins
+```
+If the plugin is found here, we can fire it up inside `msfconsole` and will be met with the greeting output for that specific plugin, signaling that it was successfully loaded in and is now ready to use:
+#### MSF - Load Nessus
+
+```shell
+load nessus
+```
+
+If the plugin is not installed correctly, we will receive the following error upon trying to load it.
+
+```shell
+load Plugin_That_Does_Not_Exist
+```
+## Installing new Plugins
+
+New, more popular plugins are installed with each update of the Parrot OS distro as they are pushed out towards the public by their makers, collected in the Parrot update repo. To install new custom plugins not included in new updates of the distro, we can take the .rb file provided on the maker's page and place it in the folder at `/usr/share/metasploit-framework/plugins` with the proper permissions.
+
+For example, let us try installing [DarkOperator's Metasploit-Plugins](https://github.com/darkoperator/Metasploit-Plugins.git). Then, following the link above, we get a couple of Ruby (`.rb`) files which we can directly place in the folder mentioned above.
+#### Downloading MSF Plugins
+
+```shell
+git clone https://github.com/darkoperator/Metasploit-Plugins
+```
