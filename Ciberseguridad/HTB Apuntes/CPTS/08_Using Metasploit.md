@@ -402,4 +402,113 @@ For example, let us try installing [DarkOperator's Metasploit-Plugins](https://
 
 ```shell
 git clone https://github.com/darkoperator/Metasploit-Plugins
+ls Metasploit-Plugins
+```
+Here we can take the plugin `pentest.rb` as an example and copy it to `/usr/share/metasploit-framework/plugins`.
+#### MSF - Copying Plugin to MSF
+
+```shell
+sudo cp ./Metasploit-Plugins/pentest.rb /usr/share/metasploit-framework/plugins/pentest.rb
+```
+Afterward, launch `msfconsole` and check the plugin's installation by running the `load` command. After the plugin has been loaded, the `help menu` at the `msfconsole` is automatically extended by additional functions.
+#### MSF - Load Plugin
+
+```shell
+msfconsole -q
+```
+
+Many people write many different plugins for the Metasploit framework. They all have a specific purpose and can be an excellent help to save time after familiarizing ourselves with them. Check out the list of popular plugins below:
+
+- nMap (pre-installed)	
+- NexPose (pre-installed)	
+- Nessus (pre-installed)
+- Mimikatz (pre-installed V.1)	
+- Stdapi (pre-installed)	
+- RailgunPriv	
+- Incognito (pre-installed)	
+- Darkoperator's
+## Mixins
+
+The Metasploit Framework is written in Ruby, an object-oriented programming language. This plays a big part in what makes `msfconsole` excellent to use. Mixins are one of those features that, when implemented, offer a large amount of flexibility to both the creator of the script and the user.
+
+Mixins are classes that act as methods for use by other classes without having to be the parent class of those other classes. Thus, it would be deemed inappropriate to call it inheritance but rather inclusion. They are mainly used when we:
+
+1. Want to provide a lot of optional features for a class.
+2. Want to use one particular feature for a multitude of classes.
+# Sessions
+
+MSFconsole can manage multiple modules at the same time. This is one of the many reasons it provides the user with so much flexibility. This is done with the use of `Sessions`, which creates dedicated control interfaces for all of your deployed modules.
+## Using Sessions
+
+While running any available exploits or auxiliary modules in msfconsole, we can background the session as long as they form a channel of communication with the target host. This can be done either by pressing the `[CTRL] + [Z]` key combination or by typing the `background` command in the case of Meterpreter stages. This will prompt us with a confirmation message. After accepting the prompt, we will be taken back to the msfconsole prompt (`msf6 >`) and will immediately be able to launch a different module.
+#### Listing Active Sessions
+
+We can use the `sessions` command to view our currently active sessions.
+
+```shell
+sessions
+```
+#### Interacting with a Session
+
+You can use the `sessions -i [no.]` command to open up a specific session.
+
+```shell
+sessions -i 1
+```
+
+This is specifically useful when we want to run an additional module on an already exploited system with a formed, stable communication channel.
+
+This can be done by backgrounding our current session, which is formed due to the success of the first exploit, searching for the second module we wish to run, and, if made possible by the type of module selected, selecting the session number on which the module should be run. This can be done from the second module's `show options` menu.
+## Jobs
+
+If, for example, we are running an active exploit under a specific port and need this port for a different module, we cannot simply terminate the session using `[CTRL] + [C]`. If we did that, we would see that the port would still be in use, affecting our use of the new module. So instead, we would need to use the `jobs` command to look at the currently active tasks running in the background and terminate the old ones to free up the port.
+#### Viewing the Jobs Command Help Menu
+
+We can view the help menu for this command, like others, by typing `jobs -h`.
+#### Viewing the Exploit Command Help Menu
+
+When we run an exploit, we can run it as a job by typing `exploit -j`. Per the help menu for the `exploit` command, adding `-j` to our command. Instead of just `exploit` or `run`, will "run it in the context of a job."
+#### Listing Running Jobs
+
+To list all running jobs, we can use the `jobs -l` command. To kill a specific job, look at the index no. of the job and use the `kill [index no.]` command. Use the `jobs -K` command to kill all running jobs.
+
+```shell
+exploit -h
+
+exploit -j
+
+jobs -l
+```
+## Exercise
+
+### The target has a specific web application running that we can find by looking into the HTML source code. What is the name of that web application?
+
+### Find the existing exploit in MSF and use it to get a shell on the target. What is the username of the user you obtained a shell with?
+
+```shell
+msfconsole
+# In msfconsole
+	use exploit/linux/http/elfinder_archive_cmd_injection
+	# Set the options
+	and RUN
+```
+
+www-data
+### The target system has an old version of Sudo running. Find the relevant exploit and get root access to the target system. Find the flag.txt file and submit the contents of it as the answer.
+
+I had to set to backgroud the current sessions
+
+```shell
+# Over the meterpreter session 
+sysinfo # Ubuntu 20.04
+shell
+# Over the shell
+	sudo -V # sudo 1.8.31
+	exit
+# Backgroud the meterpreter session to search and use another exploit
+background
+use exploit/linux/local/sudo_baron_samedit
+# set options (we set session 1 in the options)
+run
+# We got a root session (WE ARE IN)
 ```
