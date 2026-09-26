@@ -211,3 +211,103 @@ hashcat -m 0 hash2 /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/
 ```shell
 hashcat -a 3 -m 0 1e293d6912d074c0fd15844d803400dd '?u?l?l?l?l?d?s'
 ```
+# Writing Custom Wordlists and Rules
+
+Many users create their passwords based on `simplicity rather than security`. To mitigate this human tendency (which often undermines security measures), password policies can be implemented on systems to enforce specific password requirements. For instance, a system might enforce the inclusion of uppercase letters, special characters, and numbers. Most password policies mandate a minimum length—typically eight characters—and require at least one character from each specified category.
+
+We can use Hashcat to combine lists of potential names and labels with specific mutation rules to create custom wordlists. Hashcat uses a specific syntax to define characters, words, and their transformations. The complete syntax is documented in the official [Hashcat rule-based attack documentation](https://hashcat.net/wiki/doku.php?id=rule_based_attack), but the examples below are sufficient to understand how Hashcat mutates input words.
+
+|**Function**|**Description**|
+|---|---|
+|`:`|Do nothing|
+|`l`|Lowercase all letters|
+|`u`|Uppercase all letters|
+|`c`|Capitalize the first letter and lowercase others|
+|`sXY`|Replace all instances of X with Y|
+|`$!`|Add the exclamation character at the end|
+Each rule is written on a new line and determines how a given word should be transformed. If we write the functions shown above into a file, it may look like this:
+
+```shell
+:
+c
+so0
+c so0
+sa@
+c sa@
+c sa@ so0
+$!
+$! c
+$! so0
+$! sa@
+$! c so0
+$! c sa@
+$! so0 sa@
+$! c so0 sa@
+```
+
+We can use the following command to apply the rules in `custom.rule` to each word in `password.list` and store the mutated results in `mut_password.list`.
+
+```shell
+hashcat --force password.list -r custom.rule --stdout | sort -u > mut_password.list
+```
+
+In this case, the single input word will produce fifteen mutated variants.
+## Generating wordlists using CeWL
+
+We can use a tool called [CeWL](https://github.com/digininja/CeWL) to scan potential words from a company's website and save them in a separate list. We can then combine this list with the desired rules to create a customized password list—one that has a higher probability of containing the correct password for an employee. We specify some parameters, like the depth to spider (`-d`), the minimum length of the word (`-m`), the storage of the found words in lowercase (`--lowercase`), as well as the file where we want to store the results (`-w`).
+
+```shell
+cewl https://www.inlanefreight.com -d 4 -m 6 --lowercase -w inlane.wordlist
+```
+## Exercise
+
+For this sections exercise, imagine that we compromised the password hash of a `work email` belonging to `Mark White`. After performing a bit of OSINT, we have gathered the following information about Mark:
+
+- He was born on `August 5, 1998`
+- He works at `Nexura, Ltd.`
+    - The company's password policy requires passwords to be at least 12 characters long, to contain at least one uppercase letter, at least one lowercase letter, at least one symbol and at least one number
+- He lives in `San Francisco, CA, USA`
+- He has a pet cat named `Bella`
+- He has a wife named `Maria`
+- He has a son named `Alex`
+- He is a big fan of `baseball`
+
+The password hash is: `97268a8ae45ac7d15c3cea4ce6ea550b`. Use the techniques covered in this section to generate a custom wordlist and ruleset targeting Mark specifically, and crack the password.
+### What is Mark's password?
+
+Create `mark.txt`
+
+```shell
+Mark
+White
+Nexura
+SanFrancisco
+Bella
+Maria
+Alex
+baseball
+1998
+0805
+080598
+05081998
+1998
+```
+
+Then, I created a wordlist with combinations and applying a rule according what the text said
+
+`policy.rule` content:
+
+```shell
+$!
+$#
+$@
+c $!
+c $#
+c $@
+```
+
+```shell
+hashcat -m 0 hash.txt dict.txt -r policy.rule --stdout > final_wordlist.txt
+```
+ 
+ We get the Password `Baseball1998!`
