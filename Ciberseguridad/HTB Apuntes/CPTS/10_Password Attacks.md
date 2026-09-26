@@ -113,3 +113,31 @@ hashid -j 193069ceb0461e1d40d216e32c79c704
 ```
 
 Unfortunately, in our example it is still quite unclear what format the hash is in. This will sometimes be the case, and is simply one of the "problems" you will encounter as a pentester. Many times, the context of where the hash came from will be enough to make an educated case on the format.
+## Cracking files
+
+It is also possible to crack password-protected or encrypted files with JtR. Multiple `"2john"` tools come with JtR that can be used to process files and produce hashes compatible with JtR. The generalized syntax for these tools is:
+
+```shell
+<tool> <file_to_crack> > file.hash
+```
+
+|**Tool**|**Description**|
+|---|---|
+|`pdf2john`|Converts PDF documents for John|
+|`ssh2john`|Converts SSH private keys for John|
+|`mscash2john`|Converts MS Cash hashes for John|
+|`keychain2john`|Converts OS X keychain files for John|
+|`rar2john`|Converts RAR archives for John|
+|`pfx2john`|Converts PKCS#12 files for John|
+|`truecrypt_volume2john`|Converts TrueCrypt volumes for John|
+|`keepass2john`|Converts KeePass databases for John|
+|`vncpcap2john`|Converts VNC PCAP files for John|
+|`putty2john`|Converts PuTTY private keys for John|
+|`zip2john`|Converts ZIP archives for John|
+|`hccap2john`|Converts WPA/WPA2 handshake captures for John|
+|`office2john`|Converts MS Office documents for John|
+|`wpa2john`|Converts WPA/WPA2 handshakes for John|
+## Exercise
+### Use single-crack mode to crack r0lf's password.
+
+### Use wordlist-mode with rockyou.txt to crack the RIPEMD-128 password.
