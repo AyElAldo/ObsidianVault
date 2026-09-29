@@ -493,3 +493,46 @@ All these services have an authentication mechanism using a username and passwor
 ## WinRM
 
 [Windows Remote Management](https://docs.microsoft.com/en-us/windows/win32/winrm/portal) (`WinRM`) is the Microsoft implementation of the [Web Services Management Protocol](https://docs.microsoft.com/en-us/windows/win32/winrm/ws-management-protocol) (`WS-Management`). It is a network protocol based on XML web services using the [Simple Object Access Protocol](https://docs.microsoft.com/en-us/windows/win32/winrm/windows-remote-management-glossary) (`SOAP`) used for remote management of Windows systems. It takes care of the communication between [Web-Based Enterprise Management](https://en.wikipedia.org/wiki/Web-Based_Enterprise_Management) (`WBEM`) and the [Windows Management Instrumentation](https://docs.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page) (`WMI`), which can call the [Distributed Component Object Model](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dcom/4a893f3d-bd29-48cd-9f43-d9777a4415b0) (`DCOM`).
+
+For security reasons, WinRM must be activated and configured manually in Windows 10/11. Therefore, it depends heavily on the environment security in a domain or local network where we want to use WinRM. In most cases, one uses certificates or only specific authentication mechanisms to increase its security. By default, WinRM uses the TCP ports `5985` (`HTTP`) and `5986` (`HTTPS`).
+#### NetExec
+
+#### Installing NetExec
+
+We can install `NetExec` with `apt`, or clone the [GitHub repo](https://github.com/Pennyw0rth/NetExec) and follow the various [installation](https://www.netexec.wiki/getting-started/installation) methods, such as installing from source and avoiding dependency issues.
+
+```shell
+sudo apt-get -y install netexec
+```
+#### NetExec Menu Options
+
+Running the tool with the `-h` flag will show us general usage instructions and some options available to us.
+
+```shell
+netexec -h
+```
+#### NetExec Protocol-Specific Help
+
+Note that we can specify a specific protocol and receive a more detailed help menu of all of the options available to us. NetExec currently supports remote authentication using NFS, FTP, SSH, WinRM, SMB, WMI, RDP, MSSQL, LDAP, and VNC.
+
+```shell
+netexec smb -h
+```
+#### NetExec Usage
+
+The general format for using NetExec is as follows:
+
+```shell
+netexec <proto> <target-IP> -u <user or userlist> -p <password or passwordlist>
+```
+
+As an example, this is what attacking a WinRM endpoint might look like:
+
+```shell
+netexec winrm 10.129.42.197 -u user.list -p password.list
+```
+
+The appearance of `(Pwn3d!)` is the sign that we can most likely execute system commands if we log in with the brute-forced user. Another handy tool that we can use to communicate with the WinRM service is [Evil-WinRM](https://github.com/Hackplayers/evil-winrm), which allows us to communicate with the WinRM service efficiently.
+#### Evil-WinRM
+
+#### Installing Evil-WinRM
