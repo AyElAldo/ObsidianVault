@@ -428,3 +428,61 @@ bitlocker2john -i Backup.vhd > backup.hashes
 grep "bitlocker\$0" backup.hashes > backup.hash
 cat backup.hash
 ```
+
+Once a hash is generated, either `JtR` or `hashcat` can be used to crack it. For this example, we will look at the procedure with `hashcat`. The hashcat mode associated with the `$bitlocker$0$...` hash is `-m 22100`. We supply the hash, specify the wordlist, and define the hash mode. Since this encryption uses strong AES encryption, cracking may take considerable time depending on hardware performance.
+
+```shell
+hashcat -a 0 -m 22100 '$bitlocker$0$16$02b329c0453b9273f2fc1b927443b5fe$1048576$12$00b0a67f961dd80103000000$60$d59f37e70696f7eab6b8f95ae93bd53f3f7067d5e33c0394b3d8e2d1fdb885cb86c1b978f6cc12ed26de0889cd2196b0510bbcd2a8c89187ba8ec54f' /usr/share/wordlists/rockyou.txt
+```
+After successfully cracking the password, we can access the encrypted drive.
+#### Mounting BitLocker-encrypted drives in Windows
+
+The easiest method for mounting a BitLocker-encrypted virtual drive on Windows is to double-click the `.vhd` file. Since it is encrypted, Windows will initially show an error. After mounting, simply double-click the BitLocker volume to be prompted for the password.
+#### Mounting BitLocker-encrypted drives in Linux (or macOS)
+
+It is also possible to mount BitLocker-encrypted drives in Linux (or macOS). To do this, we can use a tool called [dislocker](https://github.com/Aorimn/dislocker). First, we need to install the package using `apt`:
+
+```shell
+sudo apt-get install dislocker
+```
+
+Next, we create two folders which we will use to mount the VHD.
+
+```shell
+sudo mkdir -p /media/bitlocker
+sudo mkdir -p /media/bitlockermount
+```
+
+We then use `losetup` to configure the VHD as [loop device](https://en.wikipedia.org/wiki/Loop_device), decrypt the drive using `dislocker`, and finally mount the decrypted volume:
+
+```shell
+sudo losetup -f -P Backup.vhd
+sudo dislocker /dev/loop0p2 -u1234qwer -- /media/bitlocker
+sudo mount -o loop /media/bitlocker/dislocker-file /media/bitlockermount
+```
+
+If everything was done correctly, we can now browse the files:
+
+```shell
+cd /media/bitlockermount/
+ls -la
+```
+
+Once we have analyzed the files on the mounted drive, we can unmount it using the following commands:
+
+```shell
+sudo umount /media/bitlockermount
+sudo umount /media/bitlocker
+```
+
+```shell
+bitlocker2john -i Private.vhd > bitlocker.hashes 
+grep "bitlocker\$0" bitlocker.hashes > bitlocker.hash
+ohn bitlocker.hash --wordlist=/usr/share/wordlists/rockyou.txt
+# francisco is the password
+```
+
+Now we go to our Windows Machine and mount the vhd and enter with the password `francisco`. We get the flag.txt.
+# Network Services
+
+During our penetration tests, every computer network we encounter will have services installed to manage, edit, or create content. All these services are hosted using specific permissions and are assigned to specific users. Apart from web applications, these services include (but are not limited to) `FTP`, `SMB`, `NFS`, `IMAP/POP3`, `SSH`, `MySQL/MSSQL`, `RDP`, `WinRM`, `VNC`, `Telnet`, `SMTP`, and `LDAP`.
