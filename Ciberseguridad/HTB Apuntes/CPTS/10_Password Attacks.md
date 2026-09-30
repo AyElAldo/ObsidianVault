@@ -759,11 +759,42 @@ WinLogon is the only process that intercepts login requests from the keyboard, w
 
 The [Local Security Authority Subsystem Service](https://en.wikipedia.org/wiki/Local_Security_Authority_Subsystem_Service) (`LSASS`) is comprised of multiple modules and governs all authentication processes. Located at `%SystemRoot%\System32\Lsass.exe` in the file system, it is responsible for enforcing the local security policy, authenticating users, and forwarding security audit logs to the `Event Log`. In essence, LSASS serves as the gatekeeper in Windows-based operating systems. 
 
-|**Packages**|**Description**|
-|---|---|
-|`Lsasrv.dll`|The LSA Server service both enforces security policies and acts as the security package manager for the LSA. The LSA contains the Negotiate function, which selects either the NTLM or Kerberos protocol after determining which protocol is to be successful.|
-|`Msv1_0.dll`|Authentication package for local machine logons that don't require custom authentication.|
-|`Samsrv.dll`|The Security Accounts Manager (SAM) stores local security accounts, enforces locally stored policies, and supports APIs.|
-|`Kerberos.dll`|Security package loaded by the LSA for Kerberos-based authentication on a machine.|
-|`Netlogon.dll`|Network-based logon service.|
-|`Ntdsa.dll`|Directory System Agent (DSA) that manages the Active Directory database (ntds.dit), processes LDAP queries, and handles replication between domain controllers. Only loaded on Domain Controllers.|
+| **Packages**   | **Description**                                                                                                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Lsasrv.dll`   | The LSA Server service both enforces security policies and acts as the security package manager for the LSA. The LSA contains the Negotiate function, which selects either the NTLM or Kerberos protocol after determining which protocol is to be successful. |
+| `Msv1_0.dll`   | Authentication package for local machine logons that don't require custom authentication.                                                                                                                                                                      |
+| `Samsrv.dll`   | The Security Accounts Manager (SAM) stores local security accounts, enforces locally stored policies, and supports APIs.                                                                                                                                       |
+| `Kerberos.dll` | Security package loaded by the LSA for Kerberos-based authentication on a machine.                                                                                                                                                                             |
+| `Netlogon.dll` | Network-based logon service.                                                                                                                                                                                                                                   |
+| `Ntdsa.dll`    | Directory System Agent (DSA) that manages the Active Directory database (ntds.dit), processes LDAP queries, and handles replication between domain controllers. Only loaded on Domain Controllers.                                                             |
+Each interactive logon session creates a separate instance of the WinLogon service. The [Graphical Identification and Authentication](https://docs.microsoft.com/en-us/windows/win32/secauthn/gina) (`GINA`) architecture is loaded into the process area used by WinLogon, receives and processes the credentials, and invokes the authentication interfaces via the [LSALogonUser](https://docs.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsalogonuser) function.
+#### SAM database
+
+The [Security Account Manager](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc756748\(v=ws.10\)?redirectedfrom=MSDN) (`SAM`) is a database file in Windows operating systems that stores user account credentials. It is used to authenticate both local and remote users and uses cryptographic protections to prevent unauthorized access. User passwords are stored as hashes in the registry, typically in the form of either `LM` or `NTLM` hashes. The SAM file is located at `%SystemRoot%\system32\config\SAM` and is mounted under `HKLM\SAM`. Viewing or accessing this file requires `SYSTEM` level privileges.
+
+Windows systems can be assigned to either a workgroup or domain during setup. If the system has been assigned to a workgroup, it handles the SAM database locally and stores all existing users locally in this database. However, if the system has been joined to a domain, the Domain Controller (`DC`) must validate the credentials from the Active Directory database (`ntds.dit`), which is stored in `%SystemRoot%\NTDS\ntds.dit`.
+
+To improve protection against offline cracking of the SAM database, Microsoft introduced a feature in Windows NT 4.0 called `SYSKEY` (`syskey.exe`). When enabled, SYSKEY partially encrypts the SAM file on disk, ensuring that password hashes for all local accounts are encrypted with a system-generated key.
+#### Credential Manager
+
+![Diagram of Windows logon process showing interactions between user input, Logon UI, Credential Provider, WinLogon, and Local Security Authority.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/authn_credman_credprov.png)
+
+Credential Manager is a built-in feature of all Windows operating systems that allows users to store and manage credentials used to access network resources, websites, and applications. These saved credentials are stored per user profile in the user's `Credential Locker`. The credentials are encrypted and stored at the following location:
+
+```shell
+C:\Users\[Username]\AppData\Local\Microsoft\[Vault/Credentials]\
+```
+There are various methods to decrypt credentials saved using Credential Manager. We will practice hands-on with some of these methods in this module.
+#### NTDS
+
+It is very common to encounter network environments where Windows systems are joined to a Windows domain. This setup simplifies centralized management, allowing administrators to efficiently oversee all systems within their organization. In such environments, logon requests are sent to Domain Controllers within the same Active Directory forest. Each Domain Controller hosts a file called `NTDS.dit`, which is synchronized across all Domain Controllers, with the exception of [Read-Only Domain Controllers (RODCs)](https://docs.microsoft.com/en-us/windows/win32/ad/rodc-and-active-directory-schema).
+
+`NTDS.dit` is a database file that stores Active Directory data, including but not limited to:
+
+- User accounts (username & password hash)
+- Group accounts
+- Computer accounts
+- Group policy objects
+# Attacking SAM, SYSTEM, and SECURITY
+
+With administrative access to a Windows system, we can attempt to quickly dump the files associated with the SAM database, transfer them to our attack host, and begin cracking the hashes offline. Performing this process offline allows us to continue our attacks without having to maintain an active session with the target. Let's walk through this process together using a target host. Feel free to follow along by spawning the target box provided in this section.
