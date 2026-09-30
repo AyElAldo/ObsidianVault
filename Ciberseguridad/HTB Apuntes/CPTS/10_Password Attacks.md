@@ -684,3 +684,86 @@ get flag.txt
 ## Password spraying
 
 [Password spraying](https://owasp.org/www-community/attacks/Password_Spraying_Attack) is a type of brute-force attack in which an attacker attempts to use a single password across many different user accounts. This technique can be particularly effective in environments where users are initialized with a default or standard password. For example, if it is known that administrators at a particular company commonly use `ChangeMe123!` when setting up new accounts, it would be worthwhile to spray this password across all user accounts to identify any that were not updated.
+
+Depending on the target system, different tools may be used to carry out password spraying attacks. For web applications, [Burp Suite](https://portswigger.net/burp) is a strong option, while for Active Directory environments, tools such as [NetExec](https://github.com/Pennyw0rth/NetExec) or [Kerbrute](https://github.com/ropnop/kerbrute) are commonly used.
+
+```shell
+netexec smb 10.100.38.0/24 -u <usernames.list> -p 'ChangeMe123!'
+```
+## Credential stuffing
+
+[Credential stuffing](https://owasp.org/www-community/attacks/Credential_stuffing) is another type of brute-force attack in which an attacker uses stolen credentials from one service to attempt access on others. Since many users reuse their usernames and passwords across multiple platforms (such as email, social media, and enterprise systems), these attacks are sometimes successful. As with password spraying, credential stuffing can be carried out using a variety of tools, depending on the target system.
+
+For example, if we have a list of `username:password` credentials obtained from a database leak, we can use `hydra` to perform a credential stuffing attack against an SSH service using the following syntax:
+
+```shell
+hydra -C user_pass.list ssh://10.100.38.23
+```
+## Default credentials
+
+Many systems—such as routers, firewalls, and databases—come with `default credentials`. While best practice dictates that administrators change these credentials during setup, they are sometimes left unchanged, posing a serious security risk.
+
+```shell
+pip3 install defaultcreds-cheat-sheet
+```
+
+Once installed, we can use the `creds` command to search for known default credentials associated with a specific product or vendor.
+
+```shell
+creds search linksys
+```
+
+In addition to publicly available lists and tools, default credentials can often be found in product documentation, which typically outlines the steps required to set up a service. While some devices and applications prompt the user to set a password during installation, others use a default—often weak—password.
+
+Let's imagine we have identified certain applications in use on a customer's network. After researching the default credentials online, we can combine them into a new list, formatted as `username:password`, and reuse the previously mentioned `hydra` command to attempt access.
+
+Beyond applications, default credentials are also commonly associated with routers. One such list is available [here](https://www.softwaretestinghelp.com/default-router-username-and-password-list/). While it is less likely that router credentials remain unchanged (since these devices are critical to network security), oversights do occur. Routers used in internal testing environments, for example, may be left with default settings and can be exploited to gain further access.
+
+|**Router Brand**|**Default IP Address**|**Default Username**|**Default Password**|
+|---|---|---|---|
+|3Com|[http://192.168.1.1](http://192.168.1.1/)|admin|Admin|
+|Belkin|[http://192.168.2.1](http://192.168.2.1/)|admin|admin|
+|BenQ|[http://192.168.1.1](http://192.168.1.1/)|admin|Admin|
+|D-Link|[http://192.168.0.1](http://192.168.0.1/)|admin|Admin|
+|Digicom|[http://192.168.1.254](http://192.168.1.254/)|admin|Michelangelo|
+|Linksys|[http://192.168.1.1](http://192.168.1.1/)|admin|Admin|
+|Netgear|[http://192.168.0.1](http://192.168.0.1/)|admin|password|
+## Exercise
+### Use the credentials provided to log into the target machine and retrieve the MySQL credentials. Submit them as the answer. (Format: <username:<password)
+
+```shell
+creds search mysql
+
+mysql -u "superdba" -p
+```
+# Windows Authentication Process
+
+The [Windows client authentication process](https://docs.microsoft.com/en-us/windows-server/security/windows-authentication/credentials-processes-in-windows-authentication) involves multiple modules responsible for logon, credential retrieval, and verification. Among the various authentication mechanisms in Windows, Kerberos is one of the most widely used and complex. The [Local Security Authority](https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/configuring-additional-lsa-protection) (`LSA`) is a protected subsystem that authenticates users, manages local logins, oversees all aspects of local security, and provides services for translating between user names and security identifiers (SIDs).
+
+The security subsystem maintains security policies and user accounts on a computer system. On a Domain Controller, these policies and accounts apply to the entire domain and are stored in Active Directory. Additionally, the LSA subsystem provides services for access control, permission checks, and the generation of security audit messages.
+#### Windows authentication process diagram
+
+![Diagram of Windows Authentication Process showing interactions between WinLogon.exe, LogonUI, lsass.exe, and authentication packages like NTLM and Kerberos.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/Auth_process1.png)
+Local interactive logon is handled through the coordination of several components: the logon process ([WinLogon](https://www.microsoftpressstore.com/articles/article.aspx?p=2228450&seqNum=8)), the logon user interface process (`LogonUI`), credential providers, the Local Security Authority Subsystem Service (`LSASS`), one or more authentication packages, and either the Security Accounts Manager (`SAM`) or Active Directory. Authentication packages, in this context, are Dynamic-Link Libraries (DLLs) responsible for performing authentication checks. For example, for non-domain-joined and interactive logins, the `Msv1_0.dll` authentication package is typically used.
+
+`WinLogon` is a trusted system process responsible for managing security-related user interactions, such as:
+
+- Launching `LogonUI` to prompt for credentials at login
+- Handling password changes
+- Locking and unlocking the workstation
+
+To obtain a user's account name and password, WinLogon relies on credential providers installed on the system. These credential providers are `COM` objects implemented as DLLs.
+
+WinLogon is the only process that intercepts login requests from the keyboard, which are sent via RPC messages from `Win32k.sys`. At logon, it immediately launches the `LogonUI` application to present the graphical user interface. Once the user's credentials are collected by the credential provider, WinLogon passes them to the Local Security Authority Subsystem Service (`LSASS`) to authenticate the user.
+#### LSASS
+
+The [Local Security Authority Subsystem Service](https://en.wikipedia.org/wiki/Local_Security_Authority_Subsystem_Service) (`LSASS`) is comprised of multiple modules and governs all authentication processes. Located at `%SystemRoot%\System32\Lsass.exe` in the file system, it is responsible for enforcing the local security policy, authenticating users, and forwarding security audit logs to the `Event Log`. In essence, LSASS serves as the gatekeeper in Windows-based operating systems. 
+
+|**Packages**|**Description**|
+|---|---|
+|`Lsasrv.dll`|The LSA Server service both enforces security policies and acts as the security package manager for the LSA. The LSA contains the Negotiate function, which selects either the NTLM or Kerberos protocol after determining which protocol is to be successful.|
+|`Msv1_0.dll`|Authentication package for local machine logons that don't require custom authentication.|
+|`Samsrv.dll`|The Security Accounts Manager (SAM) stores local security accounts, enforces locally stored policies, and supports APIs.|
+|`Kerberos.dll`|Security package loaded by the LSA for Kerberos-based authentication on a machine.|
+|`Netlogon.dll`|Network-based logon service.|
+|`Ntdsa.dll`|Directory System Agent (DSA) that manages the Active Directory database (ntds.dit), processes LDAP queries, and handles replication between domain controllers. Only loaded on Domain Controllers.|
