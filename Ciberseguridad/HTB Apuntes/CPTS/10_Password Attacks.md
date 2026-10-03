@@ -1321,4 +1321,28 @@ Attributes : 0
 
 >[!Answer]
 >Inlanefreight#2025
+# Attacking Active Directory and NTDS.dit
+
+`Active Directory` (`AD`) is a common and critical directory service in modern enterprise networks. AD is something we will repeatedly encounter, so we need to be familiar with various methods we can use to attack and defend these environments. It is safe to conclude that if the organization uses Windows, then AD is used to manage those Windows systems. Attacking AD is such an extensive and significant topic that we have multiple modules covering the subject.
+
+In this section, we will focus primarily on how we can extract credentials through the use of a `dictionary attack` against `AD accounts` and `dumping hashes` from the `NTDS.dit` file.
+
+Like many of the attacks we have covered thus far, our target must be reachable over the network. This means it is highly likely that we will need to have a foothold established on the internal network to which the target is connected.
+
+That said, there are situations where an organization may be using port forwarding to forward the remote desktop protocol (`3389`) or other protocols used for remote access on their [edge router](https://www.cisco.com/c/en/us/products/routers/what-is-an-edge-router.html) to a system on their internal network.
+
+Once a Windows system is joined to a domain, it will `no longer default to referencing the SAM database to validate logon requests`.
+
+When we find ourselves in a scenario where a dictionary attack is a viable next step, we can benefit from trying to tailor our attack as much as possible. In this case, we can consider the organization we are working with to perform the engagement against and use searches on various social media websites and look for an employee directory on the company's website.
+
+|Username convention|Practical example for `Jane Jill Doe`|
+|---|---|
+|`firstinitiallastname`|jdoe|
+|`firstinitialmiddleinitiallastname`|jjdoe|
+|`firstnamelastname`|janedoe|
+|`firstname.lastname`|jane.doe|
+|`lastname.firstname`|doe.jane|
+|`nickname`|doedoehacksstuff|
+Often, an email address's structure will give us the employee's username (structure: `username@domain`). For example, from the email address `jdoe`@`inlanefreight.com`, we can infer that `jdoe` is the username.
+
 
