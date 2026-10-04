@@ -1344,5 +1344,57 @@ When we find ourselves in a scenario where a dictionary attack is a viable next 
 |`lastname.firstname`|doe.jane|
 |`nickname`|doedoehacksstuff|
 Often, an email address's structure will give us the employee's username (structure: `username@domain`). For example, from the email address `jdoe`@`inlanefreight.com`, we can infer that `jdoe` is the username.
+#### Creating a custom list of usernames
 
+Let's say we have done our research and gathered a list of names based on publicly available information. We will keep the list relatively short for the sake of this lesson because organizations can have a huge number of employees.
 
+We can manually create our list(s) or use an `automated list generator` such as the Ruby-based tool [Username Anarchy](https://github.com/urbanadventurer/username-anarchy) to convert a list of real names into common username formats. Once the tool has been cloned to our local attack host using `Git`, we can run it against a list of real names as shown in the example output below:
+
+```shell
+./username-anarchy -i /home/ltnbob/names.txt
+```
+
+Using automated tools can save us time when crafting lists. Still, we will benefit from spending as much time as we can attempting to discover the naming convention an organization is using with usernames because this will reduce the need for us to guess the naming convention.
+#### Enumerating valid usernames with Kerbrute
+
+Before we start guessing passwords for usernames which might not even exist, it may be worthwhile identifying the correct naming convention and confirming the validity of some usernames. We can do this with a tool like [Kerbrute](https://github.com/ropnop/kerbrute). Kerbrute can be used for brute-forcing, password spraying and username enumeration. Right now, we are only interested in username enumeration, which would look like this:
+
+```shell
+./kerbrute_linux_amd64 userenum --dc 10.129.201.57 --domain inlanefreight.local names.txt
+```
+#### Launching a brute-force attack with NetExec
+
+Once we have our list(s) prepared or discover the naming convention and some employee names, we can launch a brute-force attack against the target domain controller using a tool such as NetExec. We can use it in conjunction with the SMB protocol to send logon requests to the target Domain Controller. Here is the command to do so:
+
+```shell
+netexec smb 10.129.201.57 -u bwilliamson -p /usr/share/wordlists/fasttrack.txt
+```
+
+In this example, NetExec is using SMB to attempt to logon as user (`-u`) `bwilliamson` using a password (`-p`) list containing a list of commonly used passwords (`/usr/share/wordlists/fasttrack.txt`). If the admins configured an account lockout policy, this attack could lock out the account that we are targeting.
+
+#### Event logs from the attack
+
+![Windows Event Viewer showing security logs with Event ID 4776 for credential validation and event details.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/events_dc.png)
+
+It can be useful to know what might have been left behind by an attack. Knowing this can make our remediation recommendations more impactful and valuable for the client we are working with. On any Windows operating system, an admin can navigate to `Event Viewer` and view the Security events to see the exact actions that were logged. This can inform decisions to implement stricter security controls and assist in any potential investigation that might be involved following a breach.
+
+Once we have discovered some credentials, we could proceed to try to gain remote access to the target domain controller and capture the NTDS.dit file.
+## Capturing NTDS.dit
+
+`NT Directory Services` (`NTDS`) is the directory service used with AD to find & organize network resources. Recall that `NTDS.dit` file is stored at `%systemroot%/ntds` on the domain controllers in a [forest](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/using-the-organizational-domain-forest-model). The `.dit` stands for [directory information tree](https://docs.oracle.com/cd/E19901-01/817-7607/dit.html). This is the primary database file associated with AD and stores all domain usernames, password hashes, and other critical schema information. If this file can be captured, we could potentially compromise every account on the domain similar to the technique we covered in this module's `Attacking SAM, SYSTEM, and SECURITY` section. As we practice this technique, consider the importance of protecting AD and brainstorm a few ways to stop this attack from happening.
+#### Connecting to a DC with Evil-WinRM
+
+We can connect to a target DC using the credentials we captured.
+
+```shell
+evil-winrm -i 10.129.201.57 -u bwilliamson -p 'P@55w0rd!'
+```
+
+Evil-WinRM connects to a target using the Windows Remote Management service combined with the PowerShell Remoting Protocol to establish a PowerShell session with the target.
+#### Checking local group membership
+
+Once connected, we can check to see what privileges `bwilliamson` has. We can start with looking at the local group membership using the command:
+
+```shell
+net localgroup
+```
