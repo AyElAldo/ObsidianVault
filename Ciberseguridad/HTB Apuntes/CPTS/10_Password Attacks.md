@@ -2153,4 +2153,17 @@ grep -ri "passw\|secret\|cred" 2>/dev/null                                      
 Onboarding_Docs_132.txt:Account credentials
 Onboarding_Docs_132.txt:**Password:** `Str0ng_Adm1nistrat0r_P@ssword_2025!`
 ```
+# Pass the Hash (PtH)
 
+A [Pass the Hash (PtH)](https://attack.mitre.org/techniques/T1550/002/) attack is a technique where an attacker uses a password hash instead of the plain text password for authentication. The attacker doesn't need to decrypt the hash to obtain a plaintext password. PtH attacks exploit the authentication protocol, as the password hash remains static for every session until the password is changed.
+
+As discussed in the previous sections, the attacker must have administrative privileges or particular privileges on the target machine to obtain a password hash. Hashes can be obtained in several ways, including:
+
+- Dumping the local SAM database from a compromised host.
+- Extracting hashes from the NTDS database (ntds.dit) on a Domain Controller.
+- Pulling the hashes from memory (lsass.exe).
+
+Let's assume we obtain the password hash (`64F12CDDAA88057E06A81B54E73B949B`) for the account `julio` from the domain `inlanefreight.htb`. Let's see how we can perform Pass the Hash attacks from Windows and Linux machines.
+## Introduction to Windows NTLM
+
+Microsoft's [Windows New Technology LAN Manager (NTLM)](https://learn.microsoft.com/en-us/windows-server/security/kerberos/ntlm-overview) is a set of security protocols that authenticates users' identities while also protecting the integrity and confidentiality of their data. NTLM is a single sign-on (SSO) solution that uses a challenge-response protocol to verify the user's identity without having them provide a password.
