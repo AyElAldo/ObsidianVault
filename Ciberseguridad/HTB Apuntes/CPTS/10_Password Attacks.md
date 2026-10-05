@@ -1586,7 +1586,85 @@ Whether we end up with access to the GUI or CLI, we know we will have some tools
 - Credentials
 
 Let's use some of these key terms to search on the IT admin's workstation.
+## Search tools
+
+#### Windows Search
+
+With access to the GUI, it is worth attempting to use `Windows Search` to find files on the target using some of the keywords mentioned above.
+
+![Windows search for 'pass' showing 'Change your password' in system settings and related options.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/WindowsSearch.png)
+
+By default, it will search various OS settings and the file system for files and applications containing the key term entered in the search bar.
+#### LaZagne
+
+We can also take advantage of third-party tools like [LaZagne](https://github.com/AlessandroZ/LaZagne) to quickly discover credentials that web browsers or other installed applications may insecurely store. LaZagne is made up of `modules` which each target different software when looking for passwords. Some of the common modules are described in the table below:
+
+|Module|Description|
+|---|---|
+|browsers|Extracts passwords from various browsers including Chromium, Firefox, Microsoft Edge, and Opera|
+|chats|Extracts passwords from various chat applications including Skype|
+|mails|Searches through mailboxes for passwords including Outlook and Thunderbird|
+|memory|Dumps passwords from memory, targeting KeePass and LSASS|
+|sysadmin|Extracts passwords from the configuration files of various sysadmin tools like OpenVPN and WinSCP|
+|windows|Extracts Windows-specific credentials targeting LSA secrets, Credential Manager, and more|
+|wifi|Dumps WiFi credentials|
+>[!Note]
+>Web browsers are some of the most interesting places to search for credentials, due to the fact that many of them offer built-in credential storage. In the most popular browsers, such as `Google Chrome`, `Microsoft Edge`, and `Firefox`, stored credentials are encrypted. However, many tools for decrypting the various credentials databases used can be found online, such as [firefox_decrypt](https://github.com/unode/firefox_decrypt) and [decrypt-chrome-passwords](https://github.com/ohyicong/decrypt-chrome-passwords). LaZagne supports `35` different browsers on Windows.
+
+It would be beneficial to keep a [standalone copy](https://github.com/AlessandroZ/LaZagne/releases/) of LaZagne on our attack host so we can quickly transfer it over to the target. `LaZagne.exe` will do just fine for us in this scenario. We can use our RDP client to copy the file over to the target from our attack host. If we are using `xfreerdp` all we must do is copy and paste into the RDP session we have established.
+
+Once `LaZagne.exe` is on the target, we can open command prompt or PowerShell, navigate to the directory the file was uploaded to, and execute the following command:
 
 ```shell
-
+start LaZagne.exe all
 ```
+
+This will execute LaZagne and run `all` included modules. We can include the option `-vv` to study what it is doing in the background. Once we hit enter, it will open another prompt and display the results.
+
+If we used the `-vv` option, we would see attempts to gather passwords from all LaZagne's supported software. We can also look on the GitHub page under the supported software section to see all the software LaZagne will try to gather credentials from. It may be a bit shocking to see how easy it can be to obtain credentials in clear text. Much of this can be attributed to the insecure way many applications store credentials.
+#### findstr
+
+We can also use [findstr](https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/findstr) to search from patterns across many types of files. Keeping in mind common key terms, we can use variations of this command to discover credentials on a Windows target:
+
+```shell
+findstr /SIM /C:"password" *.txt *.ini *.cfg *.config *.xml *.git *.ps1 *.yml
+```
+## Additional considerations
+
+There are thousands of tools and key terms we could use to hunt for credentials on Windows operating systems. Know that which ones we choose to use will be primarily based on the function of the computer. If we land on a Windows Server, we may use a different approach than if we land on a Windows Desktop. Always be mindful of how the system is being used, and this will help us know where to look. Sometimes we may even be able to find credentials by navigating and listing directories on the file system as our tools run.
+
+Here are some other places we should keep in mind when credential hunting:
+
+- Passwords in Group Policy in the SYSVOL share
+- Passwords in scripts in the SYSVOL share
+- Password in scripts on IT shares
+- Passwords in `web.config` files on dev machines and IT shares
+- Password in `unattend.xml`
+- Passwords in the AD user or computer description fields
+- KeePass databases (if we are able to guess or crack the master password)
+- Found on user systems and shares
+- Files with names like `pass.txt`, `passwords.docx`, `passwords.xlsx` found on user systems, shares, and [Sharepoint](https://www.microsoft.com/en-us/microsoft-365/sharepoint/collaboration)
+
+You have gained access to an IT admin's Windows 10 workstation and begin your credential hunting process by searching for credentials in common storage locations.
+# Linux Authentication Process
+
+Linux-based distributions support various authentication mechanisms. One of the most commonly used is [Pluggable Authentication Modules (PAM)](https://web.archive.org/web/20220622215926/http://www.linux-pam.org/Linux-PAM-html/Linux-PAM_SAG.html). The modules responsible for this functionality, such as `pam_unix.so` or `pam_unix2.so`, are typically located in `/usr/lib/x86_64-linux-gnu/security/` on Debian-based systems.
+
+These modules manage user information, authentication, sessions, and password changes. For example, when a user changes their password using the `passwd` command, PAM is invoked, which takes the appropriate precautions to handle and store the information accordingly.
+
+The `pam_unix.so` module uses standardized API calls from system libraries to update account information. The primary files it reads from and writes to are `/etc/passwd` and `/etc/shadow`
+
+PAM also includes many other service modules, such as those for LDAP, mount operations, and Kerberos authentication.
+
+The `/etc/passwd` file contains information about every user on the system and is readable by all users and services. Each entry in the file corresponds to a single user and consists of `seven fields`, which store user-related data in a structured format. These fields are separated by colons (`:`). As such, a typical entry may look something like this:
+
+| Field                                              | Value               |
+| -------------------------------------------------- | ------------------- |
+| Username                                           | `htb-student`       |
+| Password                                           | `x`                 |
+| User ID                                            | `1000`              |
+| Group ID                                           | `1000`              |
+| [GECOS](https://en.wikipedia.org/wiki/Gecos_field) | `,,,`               |
+| Home directory                                     | `/home/htb-student` |
+| Default shell                                      | `/bin/bash`         |
+The most relevant field for our purposes is the `Password` field, as it can contain different types of entries. In rare cases (generally on very old systems) this field may hold the actual password hash. On modern systems, however, password hashes are stored in the `/etc/shadow` file, which we'll examine later. Despite this, the `/etc/passwd` file is world-readable, giving attackers the ability to crack the passwords if hashes are stored here.
