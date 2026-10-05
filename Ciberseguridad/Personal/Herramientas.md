@@ -120,6 +120,27 @@ Laudanum is a repository of ready-made files that can be used to inject onto a v
 > penelope -s <File/Folder>  # Share a file or folder via HTTP
 > ```
 
+> [!info]- PCredz
+> **Intercepta tráfico de red (en vivo o desde un PCAP) y extrae credenciales, hashes (NTLM, Kerberos) y tokens de autenticación.**
+>
+> - Repositorio: https://github.com/lgandx/PCredz
+>
+> ## Instalación
+> ```bash
+> sudo apt install python3-pip libpcap-dev -y
+> git clone https://github.com/lgandx/PCredz
+> cd PCredz
+> pip3 install pcapy-ng
+> ```
+>
+> ## Modo de Uso
+> ```bash
+> sudo ./Pcredz -i eth0  # Captura en vivo desde una interfaz (requiere root)
+> ./Pcredz -f capture.pcap  # Analiza un archivo PCAP existente
+> ./Pcredz -d /ruta/a/pcaps/  # Procesa todos los PCAPs de un directorio
+> ./Pcredz -f capture.pcap -v -o /tmp/output/  # Modo verboso con directorio de salida personalizado
+> ```
+
 >[!Info]- Powershell download cradles
 >Extensive list of commands in Powershell cradles yo download or invoke for file tranfers.
 >- https://gist.github.com/HarmJ0y/bb48307ffa663256e239
