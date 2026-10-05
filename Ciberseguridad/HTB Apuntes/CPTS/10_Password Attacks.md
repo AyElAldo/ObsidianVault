@@ -1558,3 +1558,35 @@ We extract the NTLM of jennifer: `92fd67fd2f49d0e83744aa82363f021b`
 ```shell
 hashcat -m 1000 '92fd67fd2f49d0e83744aa82363f021b' /usr/share/wordlists/rockyou.txt
 ```
+# Credential Hunting in Windows
+
+Once we have access to a target Windows machine through the GUI or CLI, incorporating credential hunting into our approach can provide significant advantages.
+`Credential hunting` is the process of performing detailed searches across the file system and through various applications to discover credentials. To understand this concept, let's place ourselves in a scenario. We have gained access to an IT admin's Windows 10 workstation through RDP.
+## Search-centric
+
+Many of the tools available to us in Windows have search functionality. In this day and age, there are search-centric features built into most applications and operating systems, so we can use this to our advantage on an engagement.
+A user may have documented their passwords somewhere on the system. There may even be default credentials that could be found in various files. It would be wise to base our search for credentials on what we know about how the target system is being used. In this case, we know we have access to an IT admin's workstation.
+#### Key terms to search for
+
+Whether we end up with access to the GUI or CLI, we know we will have some tools to use for searching but of equal importance is what exactly we are searching for. Here are some helpful key terms we can use that can help us discover some credentials:
+
+- Passwords
+- Passphrases
+- Keys
+- Username
+- User account
+- Creds
+- Users
+- Passkeys
+- configuration
+- dbcredential
+- dbpassword
+- pwd
+- Login
+- Credentials
+
+Let's use some of these key terms to search on the IT admin's workstation.
+
+```shell
+
+```
