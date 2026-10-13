@@ -2726,7 +2726,100 @@ A Linux system can be configured in various ways to store Kerberos tickets. We'l
 
 >[!Note]
 A Linux machine not connected to Active Directory could use Kerberos tickets in scripts or to authenticate to the network. It is not a requirement to be joined to the domain to use Kerberos tickets from a Linux machine.
-
 ## Scenario
 
 To practice and understand how we can abuse Kerberos from a Linux system, we have a computer (`LINUX01`) connected to the Domain Controller. This machine is only reachable through `MS01`. To access this machine over SSH, we can connect to `MS01` via RDP and, from there, connect to the Linux machine using SSH from the Windows command line. Another option is to use a port forward. If you don't know how to do it, you can read the module [Pivoting, Tunneling, and Port Forwarding](https://academy.hackthebox.com/module/details/158).
+
+As an alternative, we created a port forward to simplify the interaction with `LINUX01`. By connecting to port TCP/2222 on `MS01`, we will gain access to port TCP/22 on `LINUX01`.
+
+Let's assume we are in a new assessment, and the company gives us access to `LINUX01` and the user `david@inlanefreight.htb` and password `Password2`.
+#### Linux auth via port forward
+
+```shell
+ssh david@inlanefreight.htb@10.129.204.23 -p 2222
+```
+## Identifying Linux and Active Directory integration
+
+We can identify if the Linux machine is domain-joined using [realm](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/windows_integration_guide/cmd-realmd), a tool used to manage system enrollment in a domain and set which domain users or groups are allowed to access the local system resources.
+
+```shell
+realm list
+```
+
+In case [realm](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/windows_integration_guide/cmd-realmd) is not available, we can also look for other tools used to integrate Linux with Active Directory such as [sssd](https://sssd.io/) or [winbind](https://www.samba.org/samba/docs/current/man-html/winbindd.8.html). Looking for those services running in the machine is another way to identify if it is domain-joined. We can read this [blog post](https://web.archive.org/web/20210624040251/https://www.2daygeek.com/how-to-identify-that-the-linux-server-is-integrated-with-active-directory-ad/) for more details. Let's search for those services to confirm if the machine is domain-joined.
+
+```shell
+ps -ef | grep -i "winbind\|sssd"
+```
+## Finding Kerberos tickets in Linux
+
+As an attacker, we are always looking for credentials. On Linux domain-joined machines, we want to find Kerberos tickets to gain more access. Kerberos tickets can be found in different places depending on the Linux implementation or the administrator changing default settings. Let's explore some common ways to find Kerberos tickets.
+
+## Finding KeyTab files
+
+A straightforward approach is to use `find` to search for files whose name contains the word `keytab`. When an administrator commonly creates a Kerberos ticket to be used with a script, it sets the extension to `.keytab`. Although not mandatory, it is a way in which administrators commonly refer to a keytab file.
+
+#### Using Find to search for files with keytab in the name
+
+```shell
+find / -name *keytab* -ls 2>/dev/null
+```
+
+>[!Note]
+>To use a keytab file, we must have read and write (rw) privileges on the file.
+
+Another way to find `KeyTab` files is in automated scripts configured using a cronjob or any other Linux service. If an administrator needs to run a script to interact with a Windows service that uses Kerberos, and if the keytab file does not have the `.keytab` extension, we may find the appropriate filename within the script. Let's see this example:
+
+```shell
+crontab -l
+---
+# m h  dom mon dow   command
+*/5 * * * * /home/carlos@inlanefreight.htb/.scripts/kerberos_script_test.sh
+carlos@inlanefreight.htb@linux01:~$ cat /home/carlos@inlanefreight.htb/.scripts/kerberos_script_test.sh
+#!/bin/bash
+
+kinit svc_workstations@INLANEFREIGHT.HTB -k -t /home/carlos@inlanefreight.htb/.scripts/svc_workstations.kt
+smbclient //dc01.inlanefreight.htb/svc_workstations -c 'ls' -k -no-pass > /home/carlos@inlanefreight.htb/script-test-results.txt
+```
+
+In the above script, we notice the use of [kinit](https://web.mit.edu/kerberos/krb5-1.12/doc/user/user_commands/kinit.html), which means that Kerberos is in use. [kinit](https://web.mit.edu/kerberos/krb5-1.12/doc/user/user_commands/kinit.html) allows interaction with Kerberos, and its function is to request the user's TGT and store this ticket in the cache (ccache file). We can use `kinit` to import a `keytab` into our session and act as the user.
+## Finding ccache files
+
+A credential cache or [ccache](https://web.mit.edu/kerberos/krb5-1.12/doc/basic/ccache_def.html) file holds Kerberos credentials while they remain valid and, generally, while the user's session lasts. Once a user authenticates to the domain, a ccache file is created that stores the ticket information. The path to this file is placed in the `KRB5CCNAME` environment variable. This variable is used by tools that support Kerberos authentication to find the Kerberos data. Let's look for the environment variables and identify the location of our Kerberos credentials cache:
+#### Reviewing environment variables for ccache files.
+
+```shell
+env | grep -i krb5
+```
+
+As mentioned previously, `ccache` files are located, by default, at `/tmp`. We can search for users who are logged on to the computer, and if we gain access as root or a privileged user, we would be able to impersonate a user using their `ccache` file while it is still valid.
+#### Searching for ccache files in /tmp
+
+```shell
+ls -la /tmp
+```
+## Abusing KeyTab files
+
+As attackers, we may have several uses for a keytab file. The first thing we can do is impersonate a user using `kinit`. To use a keytab file, we need to know which user it was created for. `klist` is another application used to interact with Kerberos on Linux. This application reads information from a `keytab` file. Let's see that with the following command:
+
+#### Listing KeyTab file information
+
+```shell
+klist -k -t /opt/specialfiles/carlos.keytab
+```
+#### Impersonating a user with a KeyTab
+
+```shell
+klist
+```
+
+We can attempt to access the shared folder `\\dc01\carlos` to confirm our access.
+#### Connecting to SMB Share as Carlos
+
+```shell
+smbclient //dc01/carlos -k -c ls 
+```
+
+>[!Note]
+>`-k` uses the Kerberos auth insteadof user/pass
+>
