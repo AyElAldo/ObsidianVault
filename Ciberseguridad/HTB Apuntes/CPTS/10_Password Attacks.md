@@ -3183,3 +3183,9 @@ Now that we have worked through numerous ways to capture credentials and passwor
 ## Creating a strong password
 
 Creating a strong password doesn't have to be difficult. Tools like [PasswordMonster](https://www.passwordmonster.com/) help evaluate the strength of passwords, while [1Password Password Generator](https://1password.com/password-generator/) can generate secure ones.
+
+# LAB
+
+[10_Password Attacks](Ciberseguridad/HTB%20Apuntes/CPTS/LABS/10_Password%20Attacks.md)
+
+![10_Password Attacks](Ciberseguridad/HTB%20Apuntes/CPTS/LABS/10_Password%20Attacks.md)
