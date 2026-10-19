@@ -29,3 +29,45 @@ Windows has two command-line shells: the [Command shell](https://docs.microsoft
 
 Let's discuss some commands to interact with file share using Command Shell (`CMD`) and `PowerShell`. The command [dir](https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/dir) displays a list of a directory's files and subdirectories.
 #### Windows CMD - DIR
+
+```powershell
+dir \\192.168.220.129\Finance\
+```
+The command [net use](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/gg651155\(v=ws.11\)) connects a computer to or disconnects a computer from a shared resource or displays information about computer connections. We can connect to a file share with the following command and map its content to the drive letter `n`.
+
+#### Windows CMD - Net Use
+
+```powershell
+net use n: \\192.168.220.129\Finance
+```
+
+We can also provide a username and password to authenticate to the share.
+
+```powershell
+net use n: \\192.168.220.129\Finance /user:plaintext Password123
+```
+
+With the shared folder mapped as the `n` drive, we can execute Windows commands as if this shared folder is on our local computer. Let's find how many files the shared folder and its subdirectories contain.
+#### Windows CMD - DIR
+
+We found 29,302 files. Let's walk through the command:
+
+```powershell
+dir n: /a-d /s /b | find /c ":\"
+```
+
+|**Syntax**|**Description**|
+|---|---|
+|`dir`|Application|
+|`n:`|Directory or drive to search|
+|`/a-d`|`/a` is the attribute and `-d` means not directories|
+|`/s`|Displays files in a specified directory and all subdirectories|
+|`/b`|Uses bare format (no heading information or summary)|
+The following command `| find /c ":\\"` process the output of `dir n: /a-d /s /b` to count how many files exist in the directory and subdirectories. You can use `dir /?` to see the full help. Searching through 29,302 files is time consuming, scripting and command line utilities can help us speed up the search. With `dir` we can search for specific names in files such as:
+
+- cred
+- password
+- users
+- secrets
+- key
+- Common File Extensions for source code such as: .cs, .c, .go, .java, .php, .asp, .aspx, .html.
