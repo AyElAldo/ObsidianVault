@@ -71,3 +71,107 @@ The following command `| find /c ":\\"` process the output of `dir n: /a-d /s
 - secrets
 - key
 - Common File Extensions for source code such as: .cs, .c, .go, .java, .php, .asp, .aspx, .html.
+
+```powershell
+dir n:\*cred* /s /b
+dir n:\*secret* /s /b
+```
+#### Windows CMD - Findstr
+
+```powershell
+findstr /s /i cred n:\*.*
+```
+#### Windows PowerShell
+
+PowerShell was designed to extend the capabilities of the Command shell to run PowerShell commands called `cmdlets`. Cmdlets are similar to Windows commands but provide a more extensible scripting language. We can run both Windows commands and PowerShell cmdlets in PowerShell, but the Command shell can only run Windows commands and not PowerShell cmdlets. Let's replicate the same commands now using Powershell.
+#### Windows PowerShell
+
+```powershell
+Get-ChildItem \\192.168.220.129\Finance\
+```
+
+Instead of `net use`, we can use `New-PSDrive` in PowerShell.
+
+```powershell
+New-PSDrive -Name "N" -Root "\\192.168.220.129\Finance" -PSProvider "FileSystem"
+```
+
+To provide a username and password with Powershell, we need to create a [PSCredential object](https://docs.microsoft.com/en-us/dotnet/api/system.management.automation.pscredential). It offers a centralized way to manage usernames, passwords, and credentials.
+#### Windows PowerShell - PSCredential Object
+
+```powershell
+$username = 'plaintext'
+$password = 'Password123'
+$secpassword = ConvertTo-SecureString $password -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential $username, $secpassword
+New-PSDrive -Name "N" -Root "\\192.168.220.129\Finance" -PSProvider "FileSystem" -Credential $cred
+```
+
+In PowerShell, we can use the command `Get-ChildItem` or the short variant `gci` instead of the command `dir`.
+#### Windows PowerShell - GCI
+
+```powershell
+N: 
+
+PS N:\> (Get-ChildItem -File -Recurse | Measure-Object).Count
+```
+
+We can use the property `-Include` to find specific items from the directory specified by the Path parameter.
+
+```powershell
+Get-ChildItem -Recurse -Path N:\ -Include *cred* -File
+```
+
+The `Select-String` cmdlet uses regular expression matching to search for text patterns in input strings and files. We can use `Select-String` similar to `grep` in UNIX or `findstr.exe` in Windows.
+
+```powershell
+Get-ChildItem -Recurse -Path N:\ | Select-String "cred" -List
+```
+
+CLI enables IT operations to automate routine tasks like user account management, nightly backups, or interaction with many files. We can perform operations more efficiently by using scripts than the user interface or GUI.
+#### Linux
+
+Linux (UNIX) machines can also be used to browse and mount SMB shares. Note that this can be done whether the target server is a Windows machine or a Samba server. Even though some Linux distributions support a GUI, we will focus on Linux command-line utilities and tools to interact with SMB. Let's cover how to mount SMB shares to interact with directories and files locally.
+#### Linux - Mount
+
+```shell
+sudo mkdir /mnt/Finance
+sudo mount -t cifs -o username=plaintext,password=Password123,domain=. //192.168.220.129/Finance /mnt/Finance
+```
+
+As an alternative, we can use a credential file.
+
+```shell
+mount -t cifs //192.168.220.129/Finance /mnt/Finance -o credentials=/path/credentialfile
+```
+
+The file `credentialfile` has to be structured like this:
+
+As an alternative, we can use a credential file:
+
+```shell
+mount -t cifs //192.168.220.129/Finance /mnt/Finance -o credentials=/path/credentialfile # The file contains credencials
+```
+
+>[!Note]
+>We need to install `cifs-utils` to connect to an SMB share folder. To install it we can execute from the command line `sudo apt install cifs-utils`.
+#### Linux - Find
+
+```shell
+find /mnt/Finance/ -name *cred*
+```
+
+Next, let's find files that contain the string `cred`:
+
+```shell
+grep -rn /mnt/Finance/ -ie cred
+```
+#### Linux - Install Evolution
+
+```shell
+sudo apt-get install evolution
+```
+
+>[!Note]
+If an error appears when starting evolution indicating "bwrap: Can't create file at ...", use this command to start evolution `export WEBKIT_FORCE_SANDBOX=0 && evolution`.
+# The Concept of Attacks
