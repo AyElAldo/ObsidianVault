@@ -259,3 +259,40 @@ sudo nmap -sC -sV -p 21 192.168.2.142
 ## Misconfigurations
 
 As we discussed, anonymous authentication can be configured for different services such as FTP. To access with anonymous login, we can use the `anonymous` username and no password. This will be dangerous for the company if read and write permissions have not been set up correctly for the FTP service. Because with the anonymous login, the company could have stored sensitive information in a folder that the anonymous user of the FTP service could have access to.
+## Protocol Specifics Attacks
+
+Many different attacks and methods are protocol-based. However, it is essential to note that we are not attacking the individual protocols themselves but the services that use them. Since there are dozens of services for a single protocol and they process the corresponding information differently, we will look at some.
+#### Brute Forcing
+
+If there is no anonymous authentication available, we can also brute-force the login for the FTP services using a list of the pre-generated usernames and passwords. There are many different tools to perform a brute-forcing attack. Let us explore one of them, [Medusa](https://github.com/jmk-foofus/medusa). With `Medusa`, we can use the option `-u` to specify a single user to target, or you can use the option `-U` to provide a file with a list of usernames. The option `-P` is for a file containing a list of passwords. We can use the option `-M` and the protocol we are targeting (FTP) and the option `-h` for the target hostname or IP address.
+
+>[!Note]
+>Although we may find services vulnerable to brute force, most applications today prevent these types of attacks. A more effective method is Password Spraying.
+
+```shell
+medusa -u fiona -P /usr/share/wordlists/rockyou.txt -h 10.129.203.7 -M ftp
+```
+#### FTP Bounce Attack
+
+An FTP bounce attack is a network attack that uses FTP servers to deliver outbound traffic to another device on the network. The attacker uses a `PORT` command to trick the FTP connection into running commands and getting information from a device other than the intended server.
+
+Consider we are targetting an FTP Server `FTP_DMZ` exposed to the internet. Another device within the same network, `Internal_DMZ`, is not exposed to the internet. We can use the connection to the `FTP_DMZ` server to scan `Internal_DMZ` using the FTP Bounce attack and obtain information about the server's open ports. Then, we can use that information as part of our attack against the infrastructure.
+
+![Diagram showing attacker using an intermediate device to connect to a target, execute commands, and receive sensitive data.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/116/ftp_bounce_attack.png)Source: [https://www.geeksforgeeks.org/what-is-ftp-bounce-attack/](https://www.geeksforgeeks.org/what-is-ftp-bounce-attack/)
+
+The `Nmap` -b flag can be used to perform an FTP bounce attack:
+
+```shell
+nmap -Pn -v -n -p80 -b anonymous:password@10.10.110.213 172.17.0.2
+```
+## Exercise
+### What port is the FTP service running on?
+2121
+### What username is available for the FTP server?
+robin
+### Using the credentials obtained earlier, retrieve the flag.txt file. Submit the contents as your answer.
+# Latest FTP Vulnerabilities
+
+In discussing the latest vulnerabilities, we will focus this section and the following ones on one of the previously shown attacks and present it as simply as possible without going into too much technical detail. This should help us facilitate the concept of the attack through an example related to a specific service to gain a better understanding.
+
+In this case, we will discuss the `CoreFTP before build 727` vulnerability assigned [CVE-2022-22836](https://nvd.nist.gov/vuln/detail/CVE-2022-22836). This vulnerability is for an FTP service that does not correctly process the `HTTP PUT` request and leads to an `authenticated directory`/`path traversal,` and `arbitrary file write` vulnerability. This vulnerability allows us to write files outside the directory to which the service has access.
