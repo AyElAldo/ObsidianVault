@@ -566,6 +566,10 @@ SMB         10.129.203.6    445    ATTCSVC-LINUX    [+] \:
 enum4linux 10.129.203.6 -A -C
 ```
 
+```shell
+# Tried in kali. In parrot, I could not install crackmapexec and doesn't work with netexec
+nxc smb 10.129.203.6 -u jason -p '34c8zuNBo91!@28Bszh'
+```
 # Attacking SQL Databases
 
 [MySQL](https://www.mysql.com/) and [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-2019) (`MSSQL`) are [relational database](https://en.wikipedia.org/wiki/Relational_database) management systems that store data in tables, columns, and rows. Many relational database systems like MSSQL & MySQL use the [Structured Query Language](https://en.wikipedia.org/wiki/SQL) (`SQL`) for querying and maintaining the database.
@@ -636,13 +640,67 @@ When using Windows Authentication, we need to specify the domain name or the hos
 
 ```shell
 # SQL Authentication (usuario del motor)
-sqlcmd -S SRVMSSQL -U julio -P 'MyPassword!'
+sqlcmd -S IP -U julio -P 'MyPassword!'
 
 # Windows Auth, cuenta de dominio
-sqlcmd -S SRVMSSQL -U CORP\julio -P 'MyPassword!'
+sqlcmd -S IP -U CORP\julio -P 'MyPassword!'
 
 # Windows Auth, cuenta LOCAL de la máquina
-sqlcmd -S SRVMSSQL -U SRVMSSQL\julio -P 'MyPassword!'
-sqlcmd -S SRVMSSQL -U .\julio -P 'MyPassword!'
+sqlcmd -S IP -U SRVMSSQL\julio -P 'MyPassword!'
+sqlcmd -S IP -U .\julio -P 'MyPassword!'
+```
+#### SQL Default Databases
+
+Before we explore using SQL syntax, it is essential to know the default databases for `MySQL` and `MSSQL`. Those databases hold information about the database itself and help us enumerate database names, tables, columns, etc. With access to those databases, we can use some system stored procedures, but they usually don't contain company data.
+
+`MySQL` default system schemas/databases:
+
+- `mysql` - is the system database that contains tables that store information required by the MySQL server
+- `information_schema` - provides access to database metadata
+- `performance_schema` - is a feature for monitoring MySQL Server execution at a low level
+- `sys` - a set of objects that helps DBAs and developers interpret data collected by the Performance Schema
+
+`MSSQL` default system schemas/databases:
+
+- `master` - keeps the information for an instance of SQL Server.
+- `msdb` - used by SQL Server Agent.
+- `model` - a template database copied for each new database.
+- `resource` - a read-only database that keeps system objects visible in every database on the server in sys schema.
+- `tempdb` - keeps temporary objects for SQL queries.
+#### SQL Syntax
+
+#### Show and Select Databases
+
+```mysql
+SHOW DATABASES;
+USE htbusers;
 ```
 
+If we use `sqlcmd`, we will need to use `GO` after our query to execute the SQL syntax.
+
+```mysql
+SELECT name FROM master.dbo.sysdatabases
+GO
+USE htbusers
+GO
+```
+#### Show Tables
+
+```mysql
+SHOW TABLES;
+---
+SELECT table_name FROM htbusers.INFORMATION_SCHEMA.TABLES
+GO
+```
+#### Select all Data from Table "users"
+
+```mysql
+SELECT * FROM users
+---
+GO
+```
+## Execute Commands
+
+`Command execution` is one of the most desired capabilities when attacking common services because it allows us to control the operating system. If we have the appropriate privileges, we can use the SQL database to execute system commands or create the necessary elements to do it.
+
+`MSSQL` has a [extended stored procedures](https://docs.microsoft.com/en-us/sql/relational-databases/extended-stored-procedures-programming/database-engine-extended-stored-procedures-programming?view=sql-server-ver15) called [xp_cmdshell](https://docs.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/xp-cmdshell-transact-sql?view=sql-server-ver15) which allow us to execute system commands using SQL. Keep in mind the following about `xp_cmdshell`:
