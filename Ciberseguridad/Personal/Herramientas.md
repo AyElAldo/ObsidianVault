@@ -90,6 +90,35 @@
 > ```
 > - Repositorio: https://github.com/urbanadventurer/username-anarchy
 
+> [!info]- DNSDumpster
+> Herramienta de reconocimiento de DNS que descubre subdominios, registros DNS (A, MX, NS, TXT) y hosts asociados a un dominio, agregando además información de geolocalización e infraestructura (IPs, ASN, proveedor de hosting) en un mapa visual.
+>
+> ## Modo de Uso
+> ```
+> https://dnsdumpster.com/        # Introduce el dominio objetivo en el buscador
+> ```
+> 1. Ingresa el dominio a investigar (ej. `inlanefreight.com`) en el campo de búsqueda.
+> 2. Revisa los subdominios y registros DNS encontrados, junto con el mapa de red generado.
+> 3. Exporta los resultados (hosts, IPs) para usarlos en fases posteriores del reconocimiento.
+> - URL: https://dnsdumpster.com/
+
+> [!info]- Subfinder
+> Herramienta de enumeración de subdominios que recopila información de forma pasiva consultando múltiples fuentes online (motores de búsqueda, APIs de terceros, certificados, etc.), sin generar tráfico directo contra el objetivo.
+>
+> ## Instalación
+> ```bash
+> go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+> ```
+>
+> ## Modo de Uso
+> ```bash
+> subfinder -d inlanefreight.com                     # Enumera subdominios del dominio indicado
+> subfinder -d inlanefreight.com -o subs.txt         # Guarda los resultados en un archivo
+> subfinder -dL dominios.txt -o subs.txt             # Enumera subdominios para una lista de dominios
+> subfinder -d inlanefreight.com -silent | httpx     # Encadena la salida con otra herramienta (ej. httpx para verificar hosts vivos)
+> ```
+> - Repositorio: https://github.com/projectdiscovery/subfinder
+
 # Enumeración
 
 > [!info]- Enum4Linux-ng
