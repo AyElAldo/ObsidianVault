@@ -1255,3 +1255,18 @@ Email servers are complex and usually require us to enumerate multiple servers, 
 We can use the `Mail eXchanger` (`MX`) DNS record to identify a mail server. The MX record specifies the mail server responsible for accepting email messages on behalf of a domain name. It is possible to configure several MX records, typically pointing to an array of mail servers for load balancing and redundancy.
 
 We can use tools such as `host` or `dig` and online websites such as [MXToolbox](https://mxtoolbox.com/) to query information about the MX records:
+
+```shell
+host -t MX hackthebox.eu
+```
+Es una consulta DNS para obtener los **registros MX** (Mail Exchange) de un dominio — es decir, **qué servidores reciben el correo** de ese dominio. Paso clave en la enumeración de infraestructura de correo (justo lo que estás estudiando con SMTP).
+
+Desglose:
+
+- `host` — herramienta de consulta DNS, más simple que `dig`. Hace lo mismo (preguntar al DNS) con salida más compacta.
+- `-t MX` — _type_: especifica el **tipo de registro** a consultar. `MX` = Mail Exchange, los servidores de correo del dominio.
+- `hackthebox.eu` — el dominio objetivo.
+
+```shell
+host -t MX microsoft.com
+```
