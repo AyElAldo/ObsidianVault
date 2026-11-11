@@ -133,6 +133,29 @@
 enum4linux-ng.py 10.129.14.128 -A
 >```
 
+> [!info]- smtp-user-enum
+> Herramienta para enumerar usuarios/cuentas válidas en un servidor SMTP, aprovechando los comandos `VRFY`, `EXPN` o `RCPT TO` para identificar qué nombres de usuario existen en el sistema. Útil durante el reconocimiento de servicios de correo para armar listas de usuarios válidos antes de un ataque de fuerza bruta o phishing.
+>
+> ## Instalación
+> ```bash
+> sudo apt install smtp-user-enum    # Ya viene incluida en Kali/ParrotOS
+> # o manualmente:
+> git clone https://github.com/pentestmonkey/smtp-user-enum.git
+> ```
+>
+> ## Modo de Uso
+> ```bash
+> smtp-user-enum -M VRFY -U users.txt -t 10.129.14.128            # Enumera usando el comando VRFY
+> smtp-user-enum -M EXPN -U users.txt -t 10.129.14.128            # Enumera usando el comando EXPN
+> smtp-user-enum -M RCPT -U users.txt -t 10.129.14.128            # Enumera usando RCPT TO (útil cuando VRFY/EXPN están deshabilitados)
+> smtp-user-enum -M VRFY -U users.txt -D dominio.com -t 10.129.14.128  # Especifica un dominio para las pruebas (necesario con RCPT)
+> ```
+> - `-M`: Método de enumeración (`VRFY`, `EXPN` o `RCPT`).
+> - `-U`: Wordlist con los nombres de usuario a probar.
+> - `-D`: Dominio a usar en las pruebas (requerido por el método `RCPT`).
+> - `-t`: IP o host del servidor SMTP objetivo.
+> - Repositorio: https://github.com/pentestmonkey/smtp-user-enum
+
 # Explotación
 
 >[!info]- Shells

