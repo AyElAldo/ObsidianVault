@@ -1544,4 +1544,3 @@ flag: HTB{w34k_p4$$w0rd}
 ```
 # Skill Asessments
 
-
