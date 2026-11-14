@@ -1,10 +1,13 @@
+>[!Important]
+>Este laboratorio fue hecho completamente usando herramientas manuales pero este documento está escrito con ayuda de Inteligencia Artificial para mejoras en la redacción. 
+>Las partes escritas en inglés son parte del texto original del laboratorio, sin embargo, lo demás (español) es el procedimiento para resolverlo.
+
 # Attacking Common Services - Easy (WIN-EASY)
 
 We were commissioned by the company Inlanefreight to conduct a penetration test against three different hosts to check the servers' configuration and security. We were informed that a flag had been placed somewhere on each server to prove successful access.
-
 ### You are targeting the inlanefreight.htb domain. Assess the target server and obtain the contents of the flag.txt file. Submit it as the answer.
 
-First, we run a full port/version scan against the target to identify every service running on the host:
+Se comienza con un escaneo a los puertos comunes con las banderas activas para conocer la versión y la ejecución de Scripts de reconocimiento (propios de nmap) para mayor visibilidad para ataque.
 
 ```shell
 sudo nmap -Pn -sV -sC -v 10.129.203.7 -T4 -oA easy
