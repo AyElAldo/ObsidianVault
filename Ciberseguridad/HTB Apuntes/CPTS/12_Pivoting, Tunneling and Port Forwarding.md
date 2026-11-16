@@ -68,3 +68,6 @@ default         178.62.64.1     0.0.0.0         UG        0 0          0 eth0
 ```
 
 Any traffic destined for networks not present in the routing table will be sent to the `default route`, which can also be referred to as the default gateway or gateway of last resort. When looking for opportunities to pivot, it can be helpful to look at the hosts' routing table to identify which networks we may be able to reach or which routes we may need to add.
+## Protocols, Services & Ports
+
+`Protocols` are the rules that govern network communications. Many protocols and services have corresponding `ports` that act as identifiers.
