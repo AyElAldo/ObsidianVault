@@ -38,3 +38,33 @@ We often find ourselves using various protocols to shuttle traffic in/out of a n
 One practical example of `Tunneling` would be:
 
 One way we used Tunneling was to craft our traffic to hide in HTTP and HTTPS. This is a common way we maintained Command and Control (C2) of the hosts we had compromised within a network. We masked our instructions inside GET and POST requests that appeared as normal traffic and, to the untrained eye, would look like a web request or response to any old website. If the packet were formed properly, it would be forwarded to our Control server. If it were not, it would be redirected to another website, potentially throwing off the defender checking it out.
+# The Networking Behind Pivoting
+## IP Addressing & NICs
+
+Every computer that is communicating on a network needs an IP address. If it doesn't have one, it is not on a network. The IP address is assigned in software and usually obtained automatically from a DHCP server. It is also common to see computers with statically assigned IP addresses. Static IP assignment is common with:
+
+- Servers
+- Routers
+- Switch virtual interfaces
+- Printers
+- And any devices that are providing critical services to the network
+
+Whether assigned `dynamically` or `statically`, the IP address is assigned to a `Network Interface Controller` (`NIC`). Commonly, the NIC is referred to as a `Network Interface Card` or `Network Adapter`. A computer can have multiple NICs (physical and virtual), meaning it can have multiple IP addresses assigned, allowing it to communicate on various networks. Identifying pivoting opportunities will often depend on the specific IPs assigned to the hosts we compromise because they can indicate the networks compromised hosts can reach. This is why it is important for us to always check for additional NICs using commands like `ifconfig` (in macOS and Linux) and `ipconfig` (in Windows).
+## Routing
+
+It is common to think of a network appliance that connects us to the Internet when thinking about a router, but technically any computer can become a router and participate in routing. Some of the challenges we will face in this module require us to make a pivot host route traffic to another network. One way we will see this is through the use of AutoRoute, which allows our attack box to have `routes` to target networks that are reachable through a pivot host. One key defining characteristic of a router is that it has a routing table that it uses to forward traffic based on the destination IP address.
+
+```shell
+netstat -r
+
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+default         178.62.64.1     0.0.0.0         UG        0 0          0 eth0
+10.10.10.0      10.10.14.1      255.255.254.0   UG        0 0          0 tun0
+10.10.14.0      0.0.0.0         255.255.254.0   U         0 0          0 tun0
+10.106.0.0      0.0.0.0         255.255.240.0   U         0 0          0 eth1
+10.129.0.0      10.10.14.1      255.255.0.0     UG        0 0          0 tun0
+178.62.64.0     0.0.0.0         255.255.192.0   U         0 0          0 eth0
+```
+
+Any traffic destined for networks not present in the routing table will be sent to the `default route`, which can also be referred to as the default gateway or gateway of last resort. When looking for opportunities to pivot, it can be helpful to look at the hosts' routing table to identify which networks we may be able to reach or which routes we may need to add.
