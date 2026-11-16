@@ -837,6 +837,7 @@ First, we need to identify users that we can impersonate. Sysadmins can imperson
 #### Identify Users that We Can Impersonate
 
 ```mysql
+-- MSSQL
 SELECT DISTINCT b.name
 FROM sys.server_permissions a
 INNER JOIN sys.server_principals b

