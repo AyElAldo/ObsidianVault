@@ -382,4 +382,9 @@ Microsoft Windows [Version 10.0.17763.1637]
 C:\>
 ```
 
+Our Meterpreter session should list that our incoming connection is from a local host itself (`127.0.0.1`) since we are receiving the connection over the `local SSH socket`, which created an `outbound` connection to the Ubuntu server. Issuing the `netstat` command can show us that the incoming connection is from the SSH service.
+
+The below graphical representation provides an alternative way to understand this technique.
+
+![Diagram showing network setup: Attack Host (10.10.15.5) forwards remote port 8080 to local port 8000 via SSH. Victim Server (Ubuntu) listens on port 8080, forwards to SSH. Victim Server (Windows A) at 172.16.5.19 with RDP Service. Reverse shell forwarded to MSFConsole on port 8000.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/158/44.png)
 
