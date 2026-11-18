@@ -388,3 +388,5 @@ The below graphical representation provides an alternative way to understand thi
 
 ![Diagram showing network setup: Attack Host (10.10.15.5) forwards remote port 8080 to local port 8000 via SSH. Victim Server (Ubuntu) listens on port 8080, forwards to SSH. Victim Server (Windows A) at 172.16.5.19 with RDP Service. Reverse shell forwarded to MSFConsole on port 8000.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/158/44.png)
 
+In addition to answering the challenge questions, practice this technique and try to obtain a reverse shell from the Windows target.
+
