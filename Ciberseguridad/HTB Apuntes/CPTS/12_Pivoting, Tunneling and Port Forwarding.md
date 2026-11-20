@@ -698,5 +698,6 @@ xfreerdp /v:localhost:3300 /u:victor /p:pass@123
 
 >[!Importante] 
 
-Para mas detalle consultar el diagrama completo en: [Laboratorio](src/Meterpreter Tunneling Lab.html)
+Para mas detalle consultar el diagrama completo en: [Laboratorio](src/12_MeterpreterTunnelingLab.html)
+
 
