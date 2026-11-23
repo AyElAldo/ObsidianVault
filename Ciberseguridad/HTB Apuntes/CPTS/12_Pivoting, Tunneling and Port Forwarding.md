@@ -898,3 +898,44 @@ python client.py --server-ip <IP del server rpivot> --server-port 8080 \
 ```
 
 Esto es relevante porque muchas redes empresariales no permiten _ninguna_ conexión saliente directa — solo permiten salir a través de su propio proxy autenticado, así que Rpivot necesita saber hablar ese protocolo intermedio para poder completar el backconnect.
+# Port Forwarding with Windows Netsh
+
+`netsh` es una herramienta nativa de Windows (viene preinstalada, no hay que subir nada) para configuración de red: rutas, firewall, proxies, y lo que nos interesa — **port forwarding estático**, usando el subcomando `interface portproxy`.
+
+Es el equivalente directo de `ssh -L`, pero **sin necesitar SSH en absoluto** — útil cuando comprometiste un Windows que no tiene PuTTY/Plink ni ningún cliente SSH, pero sí tienes privilegios para ejecutar comandos ahí.
+## Escenario
+
+Comprometiste la estación de trabajo de un admin de TI (`10.129.15.150` / `172.16.5.19` — dos interfaces, típico host pivote dual-homed), por ejemplo vía phishing. Quieres llegar a un servidor RDP (`172.16.5.25:3389`) que solo es visible desde la red interna donde vive esa workstation.
+
+```txt
+[Atacante] ──RDP a 10.129.15.150:8080──► [Workstation pivote] ──reenvía──► [172.16.5.25:3389]
+```
+## Comando
+
+```shell
+netsh.exe interface portproxy add v4tov4 listenport=8080 listenaddress=10.129.15.150 connectport=3389 connectaddress=172.16.5.25
+```
+
+- `interface portproxy add`: agrega una regla de reenvío de puertos.
+- `v4tov4`: indica que el reenvío es de IPv4 a IPv4 (también existen `v4tov6`, `v6tov4`, `v6tov6` si necesitas mezclar protocolos).
+- `listenport=8080` / `listenaddress=10.129.15.150`: dónde escucha — el puerto y la IP (la interfaz externa, alcanzable por ti) del propio host pivote.
+- `connectport=3389` / `connectaddress=172.16.5.25`: el destino real al que reenvía — el RDP del servidor interno.
+## Verificación
+
+```shell
+netsh.exe interface portproxy show v4tov4
+```
+
+Te lista las reglas activas, confirmando que todo lo que llegue a `10.129.15.150:8080` se reenviará hacia `172.16.5.25:3389`.
+## Uso final
+
+Desde tu atacante, conectas tu cliente RDP directo al puerto del pivote:
+
+```shell
+xfreerdp /v:10.129.15.150:8080
+```
+## Quitarlo
+
+```powershell
+netsh.exe interface portproxy delete v4tov4 listenport=8080 listenaddress=10.129.15.150
+```
