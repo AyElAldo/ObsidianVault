@@ -46,3 +46,108 @@ Cuando el usuario pida agregar herramientas nuevas (normalmente desde un apunte 
 
 ## Diseño (no cambiar salvo que lo pidan)
 Tema oscuro (negro `#050506` + acento lima `#e4f222`), colores de fase "Jewel Tones", pestañas de fase arriba (multi-seleccion), panel de variables a la izquierda ocultable, grid denso, copiar con animacion de contorno, paleta ⌘K, filtros SO/enfoque/Red-Host, CRUD + import/export JSON, persistencia en `localStorage` con merge por `BASE_VERSION`.
+
+## Nivel de detalle exigido en TODAS las tarjetas (requerimiento del usuario, 2026-11-25)
+
+El usuario pidio explicitamente llevar **todas** las tarjetas de HackerVault.html al mismo nivel de profundidad que las de **Chisel** y **Dnscat2** (fase `actions`/`c2`, anadidas 2026-11-24/25). Esto aplica tanto a las ~53 tarjetas ya existentes (pendientes de enriquecer) como a **cualquier herramienta nueva** que se agregue de ahora en adelante — no es opcional, es el estandar por defecto.
+
+Una tarjeta al nivel esperado tiene:
+- **3-5 `subs`** (no 1-2 genericos), cada uno cubriendo un paso real: instalacion/compilacion, los distintos modos de uso (ej. normal vs reverse), y troubleshooting especifico con errores conocidos y su causa.
+- Al menos un `sub` o bloque `info` con **advertencias/recomendaciones explicitas** cuando el apunte original las menciona (ej: incompatibilidades de version, deteccion por EDR, limites de intentos/lockout, variantes obsoletas).
+- `examples` reales (no arrays vacios) usando las variables globales `{{...}}`.
+- `help` relleno cuando exista un `-h`/`man` real para esa herramienta.
+- Recursos externos citados si el apunte los menciona (writeups, blogs, nombre de maquina de HTB, etc.), tal como se hizo con el post de Oxdf y el video de IppSec en Chisel.
+
+### Importante: esto no es solo "agregar texto" — hay que releer el apunte `.md` origen
+Para enriquecer una tarjeta ya existente hay que volver a leer la seccion correspondiente del `.md` fuente (ver `source:` del tool) y extraer matices, advertencias y pasos que quedaron fuera la primera vez — no inventar relleno ni expandir con generalidades. Si el apunte no tiene mas profundidad que la ya capturada, esta bien dejar la tarjeta como esta (no inflar artificialmente).
+
+### Caveat tecnico: enriquecer una tarjeta EXISTENTE no se propaga solo con subir BASE_VERSION
+El merge de `localStorage` (`loadData()`) solo **agrega** tools nuevas por `name` que el usuario todavia no tiene guardadas; **nunca sobreescribe** el contenido de una tarjeta cuyo `name` ya existe en su `localStorage`. Si el usuario ya abrio HackerVault.html antes, enriquecer una tarjeta existente en el codigo no le mostrara nada nuevo hasta que pulse **"↺ Restaurar base original"** (pierde sus ediciones locales) o borre el `localStorage` del archivo. Avisar de esto cada vez que se enriquezcan tarjetas que ya existian (no aplica a tarjetas nuevas, esas si aparecen solas con el merge).
+
+### Checklist de progreso (marcar `[x]` al enriquecer; permite retomar si se pierde la sesion)
+
+**Ya al nivel esperado:**
+- [x] Dnscat2 (c2)
+- [x] Chisel (actions)
+
+**recon — completo (2026-11-25):**
+- [x] Nmap (ya estaba al nivel, sin cambios)
+- [x] WHOIS
+- [x] dig / DNS
+- [x] Subfinder / Amass
+- [x] crt.sh (CT logs)
+- [x] VHost Fuzzing
+- [x] Shodan
+- [x] Web Fingerprinting
+- [x] DNSDumpster
+- [x] theHarvester
+- [x] Enum4linux-ng
+- [x] smtp-user-enum
+- [x] username-anarchy
+- [x] ReconSpider
+- [x] SMB Enumeration
+- [x] Nessus / OpenVAS
+- [x] searchsploit
+
+**Pendientes — weapon:**
+- [ ] MSFvenom
+- [ ] Crunch
+- [ ] CeWL
+- [ ] Reglas de mutacion (Hashcat)
+- [ ] JS Obfuscation
+- [ ] Web Shells (preparacion)
+
+**Pendientes — delivery:**
+- [ ] PowerShell Downloads
+- [ ] Descargas Linux (wget/curl)
+- [ ] SMB File Transfer (impacket)
+- [ ] Servidores HTTP rapidos
+- [ ] LOLBins (certutil / bitsadmin)
+- [ ] SCP
+
+**Pendientes — exploit:**
+- [ ] Metasploit (msfconsole)
+- [ ] Hydra
+- [ ] Medusa
+- [ ] NetExec / CrackMapExec
+- [ ] Evil-WinRM
+- [ ] Attacking SQL (MSSQL/MySQL)
+- [ ] Attacking FTP
+- [ ] Responder
+- [ ] SQL Injection (fundamentos)
+- [ ] Cross-Site Scripting (XSS)
+- [ ] Clickjacking (PoC)
+- [ ] Kerbrute
+
+**Pendientes — install:**
+- [ ] Web Shell (acceso via navegador)
+- [ ] Spawning de shell interactiva (TTY)
+
+**Pendientes — c2:**
+- [ ] Netcat Listener
+- [ ] Penelope
+
+**Pendientes — actions:**
+- [ ] John the Ripper
+- [ ] Hashcat
+- [ ] Cracking de archivos/archives
+- [ ] Dump de credenciales (SAM/NTDS)
+- [ ] linPEAS
+- [ ] winPEAS
+- [ ] GTFOBins
+- [ ] Pivoting / Tunneling
+- [ ] PCredz
+- [ ] Attacking LSASS
+- [ ] Windows Credential Manager
+- [ ] Pass-the-Hash (PtH)
+- [ ] Pass-the-Ticket (PtT)
+- [ ] Credential Hunting (Windows)
+- [ ] Linux Auth & Cracking
+- [ ] Pivoting (Windows / alternativas)
+
+**Pendientes — util:**
+- [ ] HackTricks
+- [ ] SecLists
+- [ ] Encoders / Decoders
+
+Al terminar cada tanda de tarjetas, actualizar esta checklist en el mismo commit/edicion antes de seguir, y avisar al usuario que debe "Restaurar base original" si quiere ver las tarjetas existentes enriquecidas.

