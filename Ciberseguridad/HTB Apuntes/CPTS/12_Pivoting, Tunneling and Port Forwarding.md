@@ -1289,4 +1289,7 @@ Reduce efectos visuales, wallpaper y animaciones, para priorizar ancho de banda 
 - Para probar esta tecnica en un laboratorio personal sin tener una maquina Windows dedicada: usar las **VMs de evaluacion gratuitas de Microsoft (90 dias)** desde https://developer.microsoft.com/en-us/windows/downloads/virtual-machines/, configuradas con recursos minimos (3-4GB RAM, 2 CPU, efectos visuales desactivados) para no afectar el rendimiento del host.
 - Windows Defender puede marcar el zip de SocksOverRDP como herramienta ofensiva al descargarlo (ver exclusion de Defender arriba).
 - **Tomar un snapshot de la VM antes de instalar las herramientas**, para poder revertir rapido si algo sale mal o se quiere repetir la prueba desde cero.
+# Skill Assessment
+
+
 
